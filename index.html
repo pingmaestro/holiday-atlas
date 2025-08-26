@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Holiday Atlas — Countries with Holidays</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin="anonymous"
+    >
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container">
+        <div class="brand">Holiday Atlas</div>
+        <nav class="nav">
+          <a href="#map">Map</a>
+          <a href="#ranking">Ranking</a>
+          <a href="#methodology">Methodology</a>
+        </nav>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="container">
+        <h1>Countries with Holidays — Interactive Map</h1>
+        <p>
+          Hover the map to see the country and monthly holiday count. Counts come from Calendarific via a serverless proxy (no API keys in the client).
+        </p>
+        <ul class="toc" aria-label="On this page">
+          <li><a href="#map-card">Map</a></li>
+          <li><a href="#ranking">Ranking table</a></li>
+          <li><a href="#methodology">Methodology</a></li>
+        </ul>
+      </div>
+    </section>
+
+    <main class="container grid">
+      <!-- MAIN COLUMN -->
+      <section>
+        <!-- Map Card -->
+        <article id="map-card" class="card">
+          <div class="hd">
+            <strong>Map — Holidays by Country</strong>
+            <div class="controls">
+              <label for="month" class="note">Month</label>
+              <select id="month" aria-label="Month"></select>
+              <label for="year" class="note">Year</label>
+              <input id="year" type="number" min="1900" max="2100" aria-label="Year" />
+            </div>
+          </div>
+          <div class="bd">
+            <div
+              id="map"
+              role="img"
+              aria-label="World map showing countries colored by holiday count"
+            ></div>
+            <div id="tip" class="tooltip" style="display:none" aria-hidden="true"></div>
+          </div>
+        </article>
+
+        <!-- Ranking Card (placeholder for later) -->
+        <article id="ranking" class="card" style="margin-top:16px">
+          <div class="hd">
+            <strong>Countries with the Most Holidays (selected month)</strong>
+          </div>
+          <div class="bd">
+            <div id="rows" class="rows note">
+              Coming soon — this section will list countries by count for the selected month. For now, use the map tooltips.
+            </div>
+          </div>
+        </article>
+
+        <!-- Methodology Card -->
+        <article id="methodology" class="card" style="margin-top:16px">
+          <div class="hd">
+            <strong>Methodology</strong>
+          </div>
+          <div class="bd">
+            <p>
+              This visualization uses <em>national</em> holidays from the Calendarific API. The client calls a same-origin serverless proxy that holds the API key in an environment variable; responses are cached to minimize calls.
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <!-- SIDEBAR COLUMN -->
+      <aside class="sidebar">
+        <div class="card">
+          <div class="hd"><strong>About</strong></div>
+          <div class="bd">
+            <p>
+              <strong>Holiday Atlas</strong> is a portfolio demo: clean UI, secure key handling, and efficient caching.
+            </p>
+          </div>
+        </div>
+        <div class="card">
+          <div class="hd"><strong>Data freshness</strong></div>
+          <div class="bd">
+            <p class="note">
+              Counts cache for 7 days at the proxy. The client also memoizes hover results during a session.
+            </p>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </body>
+</html>
+</html>
