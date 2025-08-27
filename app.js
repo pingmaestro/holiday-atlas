@@ -29,7 +29,7 @@
   }
 
   // ---------- API helpers (cache + fetch) ----------
-  const cache = new Map(); // key: "CA-2025-8-public" -> data
+  const cache = new Map(); // key: "CA-2025-8-public"
   async function getHolidayCount(iso2, month, year, scope) {
     const s = (scope || 'national').toLowerCase();
     const key = `${iso2}-${year}-${month}-${s}`;
@@ -57,9 +57,8 @@
     };
   };
 
-  // ---------- Static SVG map (no zoom/pan) ----------
+  // ---------- Static SVG map (GeoJSON, no zoom/pan) ----------
   async function renderMap() {
-    // Clean container
     mapHost.innerHTML = '';
 
     const width = mapHost.clientWidth || 960;
@@ -72,15 +71,17 @@
       .style('width', '100%')
       .style('height', `${height}px`);
 
-    // Natural Earth projection looks nice + static
     const projection = d3.geoNaturalEarth1();
     const path = d3.geoPath(projection);
 
-    // World countries with ISO2 codes (cca2) and human names (name.common)
-    const WORLD_URL = 'https://cdn.jsdelivr.net/npm/world-countries@4.0.0/countries.geo.json';
-    const geo = await fetch(WORLD_URL).then(r => r.json());
+    // ✅ Natural Earth admin-0 countries with ISO_A2 + NAME props
+    const WORLD_URL = 'https://cdn.jsdelivr.net/npm/three-conic-polygon-geometry@1.4.4/example/geojson/ne_110m_admin_0_countries.geojson';
 
-    // Fit projection to our viewport
+    const geo = await fetch(WORLD_URL).then(r => {
+      if (!r.ok) throw new Error(`GeoJSON fetch failed: ${r.status}`);
+      return r.json();
+    });
+
     projection.fitSize([width, height], geo);
 
     // Styles
@@ -88,9 +89,8 @@
     const fillHover  = '#e9f1ff';
     const stroke     = '#cfd7e6';
 
-    const g = svg.append('g');
-
-    const countries = g.selectAll('path.country')
+    const countries = svg.append('g')
+      .selectAll('path.country')
       .data(geo.features)
       .enter()
       .append('path')
@@ -99,21 +99,28 @@
       .attr('fill', fillNormal)
       .attr('stroke', stroke)
       .attr('stroke-width', 0.6)
-      .attr('vector-effect', 'non-scaling-stroke') // keeps borders thin when resized
+      .attr('vector-effect', 'non-scaling-stroke')
       .style('cursor', 'default');
 
+    const getISO2 = (props) => {
+      const raw = props.ISO_A2 || props.iso_a2 || props.iso2 || props.cca2 || null;
+      if (!raw || raw === '-99') return null;   // Natural Earth uses -99 for some territories
+      return String(raw).toUpperCase();
+    };
+    const getName = (props) =>
+      props.NAME || props.ADMIN || props.name_long || props.name || 'Unknown';
+
     const onMove = throttle(async function (event, d) {
-      const iso2 = (d.properties.cca2 || '').toUpperCase();
-      const name = d.properties?.name?.common || d.properties?.name || 'Unknown';
+      const props = d.properties || {};
+      const iso2  = getISO2(props);
+      const name  = getName(props);
+      const x = event.clientX, y = event.clientY;
 
-      // Tooltip position
-      const x = event.clientX;
-      const y = event.clientY;
-
-      if (!iso2 || iso2 === 'XK') { // XK (Kosovo) often lacks upstream data
+      if (!iso2 || iso2 === 'XK') {
         setTip(x, y, `<strong>${name}</strong><span class="pill">—</span>`);
         return;
       }
+
       setTip(x, y, `<strong>${name}</strong><span class="pill">loading…</span>`);
 
       const month = Number(monthSel.value);
@@ -134,16 +141,16 @@
     }, 120);
 
     countries
-      .on('mousemove', function (event) {
+      .on('mousemove', function (event, d) {
         d3.select(this).attr('fill', fillHover);
-        onMove.call(this, event, d3.select(this).datum());
+        onMove(event, d);
       })
       .on('mouseout', function () {
         d3.select(this).attr('fill', fillNormal);
         hideTip();
       });
 
-    // Redraw on container resize (keeps it crisp)
+    // Redraw on container resize
     let resizeTimer;
     window.addEventListener('resize', () => {
       clearTimeout(resizeTimer);
@@ -157,5 +164,8 @@
   if (scopeSel && scopeSel.addEventListener) scopeSel.addEventListener('change', hideTip);
 
   // ---------- Boot ----------
-  renderMap();
+  renderMap().catch(err => {
+    console.error('Map init failed:', err);
+    mapHost.innerHTML = '<div class="note">Failed to load map data.</div>';
+  });
 })();
