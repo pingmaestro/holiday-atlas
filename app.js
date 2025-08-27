@@ -4,6 +4,7 @@
   const monthSel = document.getElementById('month');
   const yearInput = document.getElementById('year');
   const scopeSel = document.getElementById('scope') || { value: 'national' };
+  const mapHost = document.getElementById('map');
 
   // ---------- Month controls ----------
   const months = Array.from({ length: 12 }, (_, i) =>
@@ -13,21 +14,6 @@
   const today = new Date();
   monthSel.value = String(today.getMonth() + 1);
   yearInput.value = String(today.getFullYear());
-
-  // ---------- Map (Canvas renderer + no wrap to avoid horizontal artifacts) ----------
-  const canvasRenderer = L.canvas({ padding: 0.5 });
-  const map = L.map('map', { zoomControl: false, preferCanvas: true }).setView([20, 0], 2);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    minZoom: 2,
-    maxZoom: 5,
-    attribution: '\u00a9 OpenStreetMap',
-    noWrap: true
-  }).addTo(map);
-
-  // ---------- Styling (keep stroke constant; change fill only on hover) ----------
-  const baseStroke = { color: '#cfd7e6', weight: 0.6, lineJoin: 'round' };
-  function styleNormal() { return { ...baseStroke, fillColor: '#f6f9ff', fillOpacity: 1 }; }
-  function styleHover()  { return { ...baseStroke, fillColor: '#e9f1ff', fillOpacity: 1 }; }
 
   // ---------- Tooltip helpers ----------
   function setTip(x, y, html) {
@@ -42,19 +28,16 @@
     tip.setAttribute('aria-hidden', 'true');
   }
 
-  // ---------- Helpers (cache + ISO2 + API) ----------
-  const cache = new Map(); // key: "CA-2025-8-public"
-  function getISO2(feature) {
-    const p = (feature && feature.properties) || {};
-    const raw = p.iso2 || p.ISO2 || p.ISO_A2 || p.iso_a2 || p.iso_3166_1_alpha_2 || null;
-    if (!raw || raw === '-99') return null;
-    return String(raw).toUpperCase();
-  }
+  // ---------- API helpers (cache + fetch) ----------
+  const cache = new Map(); // key: "CA-2025-8-public" -> data
   async function getHolidayCount(iso2, month, year, scope) {
     const s = (scope || 'national').toLowerCase();
     const key = `${iso2}-${year}-${month}-${s}`;
     if (cache.has(key)) return cache.get(key);
-    const r = await fetch(`/api/holidayCount?iso2=${iso2}&month=${month}&year=${year}&scope=${encodeURIComponent(s)}`);
+
+    const r = await fetch(
+      `/api/holidayCount?iso2=${iso2}&month=${month}&year=${year}&scope=${encodeURIComponent(s)}`
+    );
     if (!r.ok) {
       const fallback = { count: null, name: null };
       cache.set(key, fallback);
@@ -74,73 +57,98 @@
     };
   };
 
-  // ---------- Load & render countries ----------
-  async function loadMap() {
-    const topoURL  = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
-    const namesURL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/country-names.json';
+  // ---------- Static SVG map (no zoom/pan) ----------
+  async function renderMap() {
+    // Clean container
+    mapHost.innerHTML = '';
 
-    if (typeof topojson === 'undefined') {
-      console.error('TopoJSON library not loaded.');
-      return;
-    }
+    const width = mapHost.clientWidth || 960;
+    const height = 520;
 
-    const [topoData, nameDataRaw] = await Promise.all([
-      fetch(topoURL).then(r => (r.ok ? r.json() : Promise.reject(new Error(r.status)))),
-      fetch(namesURL).then(r => (r.ok ? r.json() : [])).catch(() => [])
-    ]);
+    const svg = d3.select(mapHost)
+      .append('svg')
+      .attr('viewBox', `0 0 ${width} ${height}`)
+      .attr('preserveAspectRatio', 'xMidYMid meet')
+      .style('width', '100%')
+      .style('height', `${height}px`);
 
-    const nameData = Array.isArray(nameDataRaw) ? nameDataRaw : [];
-    const byId = new Map(nameData.map(d => [+d.id, d])); // id -> { name, iso2? }
-    const geo = topojson.feature(topoData, topoData.objects.countries);
+    // Natural Earth projection looks nice + static
+    const projection = d3.geoNaturalEarth1();
+    const path = d3.geoPath(projection);
 
-    L.geoJSON(geo, {
-      renderer: canvasRenderer,
-      style: styleNormal,
-      onEachFeature: (feature, layer) => {
-        const meta = byId.get(+feature.id) || {};
-        feature.properties.name = meta.name || feature.properties.name || 'Unknown';
-        if (meta.iso2) {
-          feature.properties.iso2 = meta.iso2;
-          feature.properties.ISO_A2 = meta.iso2; // help getISO2()
-        }
+    // World countries with ISO2 codes (cca2) and human names (name.common)
+    const WORLD_URL = 'https://cdn.jsdelivr.net/npm/world-countries@4.0.0/countries.geo.json';
+    const geo = await fetch(WORLD_URL).then(r => r.json());
 
-        const handleMove = throttle(async (e) => {
-          const name  = feature.properties.name || 'Unknown';
-          const iso2  = getISO2(feature);
-          const month = Number(monthSel.value);
-          const year  = Number(yearInput.value);
-          const scope = (scopeSel.value || 'national').toLowerCase();
-          const p     = e.originalEvent;
+    // Fit projection to our viewport
+    projection.fitSize([width, height], geo);
 
-          if (!iso2) {
-            setTip(p.clientX, p.clientY, `<strong>${name}</strong><span class="pill">—</span>`);
-            return;
-          }
-          setTip(p.clientX, p.clientY, `<strong>${name}</strong><span class="pill">loading…</span>`);
+    // Styles
+    const fillNormal = '#f6f9ff';
+    const fillHover  = '#e9f1ff';
+    const stroke     = '#cfd7e6';
 
-          try {
-            const { count, name: apiName } = await getHolidayCount(iso2, month, year, scope);
-            const safeCount = count == null ? '—' : count;
-            setTip(
-              p.clientX, p.clientY,
-              `<strong>${apiName || name}</strong>
-               <span class="pill">${safeCount} ${scope === 'all' ? 'holidays' : `${scope} holidays`}</span>`
-            );
-          } catch {
-            setTip(p.clientX, p.clientY, `<strong>${name}</strong><span class="pill">error</span>`);
-          }
-        }, 120);
+    const g = svg.append('g');
 
-        layer.on('mousemove', (e) => {
-          layer.setStyle(styleHover());   // change fill only
-          handleMove(e);
-        });
-        layer.on('mouseout', () => {
-          layer.setStyle(styleNormal());
-          hideTip();
-        });
+    const countries = g.selectAll('path.country')
+      .data(geo.features)
+      .enter()
+      .append('path')
+      .attr('class', 'country')
+      .attr('d', path)
+      .attr('fill', fillNormal)
+      .attr('stroke', stroke)
+      .attr('stroke-width', 0.6)
+      .attr('vector-effect', 'non-scaling-stroke') // keeps borders thin when resized
+      .style('cursor', 'default');
+
+    const onMove = throttle(async function (event, d) {
+      const iso2 = (d.properties.cca2 || '').toUpperCase();
+      const name = d.properties?.name?.common || d.properties?.name || 'Unknown';
+
+      // Tooltip position
+      const x = event.clientX;
+      const y = event.clientY;
+
+      if (!iso2 || iso2 === 'XK') { // XK (Kosovo) often lacks upstream data
+        setTip(x, y, `<strong>${name}</strong><span class="pill">—</span>`);
+        return;
       }
-    }).addTo(map);
+      setTip(x, y, `<strong>${name}</strong><span class="pill">loading…</span>`);
+
+      const month = Number(monthSel.value);
+      const year  = Number(yearInput.value);
+      const scope = (scopeSel.value || 'national').toLowerCase();
+
+      try {
+        const { count, name: apiName } = await getHolidayCount(iso2, month, year, scope);
+        const safe = count == null ? '—' : count;
+        setTip(
+          x, y,
+          `<strong>${apiName || name}</strong>
+           <span class="pill">${safe} ${scope === 'all' ? 'holidays' : `${scope} holidays`}</span>`
+        );
+      } catch {
+        setTip(x, y, `<strong>${name}</strong><span class="pill">error</span>`);
+      }
+    }, 120);
+
+    countries
+      .on('mousemove', function (event) {
+        d3.select(this).attr('fill', fillHover);
+        onMove.call(this, event, d3.select(this).datum());
+      })
+      .on('mouseout', function () {
+        d3.select(this).attr('fill', fillNormal);
+        hideTip();
+      });
+
+    // Redraw on container resize (keeps it crisp)
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(renderMap, 150);
+    }, { passive: true });
   }
 
   // ---------- UI events ----------
@@ -149,5 +157,5 @@
   if (scopeSel && scopeSel.addEventListener) scopeSel.addEventListener('change', hideTip);
 
   // ---------- Boot ----------
-  loadMap();
+  renderMap();
 })();
