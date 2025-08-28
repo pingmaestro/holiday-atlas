@@ -1,13 +1,11 @@
-// Highcharts Maps (no D3) — snappy hover, clean tooltip, null interaction, no legend dimming
+// Highcharts Maps — snappy hover, clean tooltip, include null areas, no legend-dim bug
 (async function () {
   const YEAR = 2025;
 
-  // State
   let TOTALS = {};   // { FR:{ name, national, regional }, ... }
   let REGIONS = {};  // { FR:{ 'FR-75': n, ... }, ... }
-  const detailsCache = new Map(); // key: "FR-2025" -> holidays[]
+  const detailsCache = new Map(); // "FR-2025" -> holidays[]
 
-  // Elements
   const detailsEl = document.getElementById('details');
   const detailsTitle = document.getElementById('details-title');
   const detailsBody = document.getElementById('details-body');
@@ -17,7 +15,7 @@
     const suffix = regionCode ? ` — ${regionCode}` : '';
     detailsTitle.textContent = `${displayName}${suffix} — Holidays (${YEAR})`;
 
-    let list = holidays || [];
+    let list = Array.isArray(holidays) ? holidays : [];
     if (regionCode) list = list.filter(h => Array.isArray(h.counties) && h.counties.includes(regionCode));
 
     if (!list.length) {
@@ -68,9 +66,9 @@
 
     rows.querySelectorAll('.region-row').forEach(el => {
       const code = el.getAttribute('data-code');
-      const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
       el.title = `${code}: ${m[code]} regional holidays`;
       el.addEventListener('click', () => {
+        const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
         const countryName = (TOTALS[iso2]?.name) || iso2;
         renderDetails(iso2, countryName, holidays, code);
         detailsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -121,7 +119,7 @@
     TOTALS = totalsJSON.totals || {};
     REGIONS = totalsJSON.regions || {};
 
-    // Prepare series data
+    // Build data rows: [code, national, label]
     const rows = Object.entries(TOTALS).map(([code, rec]) => [
       code,
       Number.isFinite(rec?.national) ? rec.national : null,
@@ -129,7 +127,7 @@
     ]);
     const nationalValues = rows.map(r => r[1]).filter(v => v !== null);
 
-    // Load topology
+    // Load world topology
     const topology = await fetch('https://code.highcharts.com/mapdata/custom/world.topo.json').then(r => r.json());
 
     Highcharts.mapChart('wpr-map', {
@@ -137,9 +135,9 @@
         map: topology,
         spacing: [0, 0, 0, 0],
         backgroundColor: 'transparent',
-        animation: false // no chart animations
+        animation: false
       },
-      title: { text: null }, // no title bar
+      title: { text: null },
       credits: { enabled: true },
       exporting: {
         enabled: true,
@@ -156,9 +154,8 @@
           x: -8,
           theme: { r: 0, 'stroke-width': 1, stroke: '#cfd7e6', fill: '#ffffff' }
         },
-        buttons: { zoomIn: { y: 48 }, zoomOut: { y: 84 } } // stack under burger
+        buttons: { zoomIn: { y: 48 }, zoomOut: { y: 84 } }
       },
-      // Kill interactivity on legend (prevents dimming on hover)
       legend: {
         layout: 'horizontal',
         align: 'center',
@@ -173,12 +170,13 @@
       tooltip: {
         useHTML: true,
         headerFormat: '',
-        animation: false,       // snappy tooltip
+        animation: false,
         hideDelay: 0,
         formatter: function () {
-          const name = this.point.name || this.point.options?.label || this.point.code || '';
-          const val = this.point.value;
-          if (val === null || typeof val === 'undefined') {
+          // name always; value if present else "No data"
+          const name = this.point.name || this.point.options?.label || this.point.options?.code || '';
+          const val = (typeof this.point.value === 'number') ? this.point.value : null;
+          if (val === null) {
             return `<strong>${Highcharts.escapeHTML(name)}</strong><br/><span class="pill">No data</span>`;
           }
           return `<strong>${Highcharts.escapeHTML(name)}</strong><br/><span class="pill">${val} national holidays</span>`;
@@ -186,13 +184,14 @@
       },
       plotOptions: {
         series: {
+          // snappy hover + no global dimming
           states: {
             hover: { animation: { duration: 0 }, halo: false },
-            inactive: { opacity: 1 } // don't dim others (incl. legend hover)
+            inactive: { opacity: 1 }
           },
           animation: false,
-          // Ensure null points (no data) still respond to hover/click
-          nullInteraction: true,
+          nullInteraction: true, // allow hover/click for null points
+          enableMouseTracking: true,
           cursor: 'pointer'
         }
       },
@@ -201,6 +200,7 @@
         data: rows,                          // [code, national, label]
         keys: ['code', 'value', 'label'],
         joinBy: ['iso-a2', 'code'],
+        allAreas: true,                      // <-- show countries even if not in data
         borderColor: '#cfd7e6',
         nullColor: '#d9d9d9',
         states: { hover: { color: '#ffe082', animation: { duration: 0 }, halo: false } },
