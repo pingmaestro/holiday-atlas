@@ -1,10 +1,10 @@
-// Highcharts Maps — snappy hover, clean tooltip, include null areas, no legend-dim bug
+// Highcharts Maps — force tooltip on hover, include null areas, snappy hover
 (async function () {
   const YEAR = 2025;
 
-  let TOTALS = {};   // { FR:{ name, national, regional }, ... }
-  let REGIONS = {};  // { FR:{ 'FR-75': n, ... }, ... }
-  const detailsCache = new Map(); // "FR-2025" -> holidays[]
+  let TOTALS = {};
+  let REGIONS = {};
+  const detailsCache = new Map();
 
   const detailsEl = document.getElementById('details');
   const detailsTitle = document.getElementById('details-title');
@@ -170,10 +170,12 @@
       tooltip: {
         useHTML: true,
         headerFormat: '',
+        followPointer: true,
+        stickOnContact: true,
+        shadow: false,
         animation: false,
         hideDelay: 0,
         formatter: function () {
-          // name always; value if present else "No data"
           const name = this.point.name || this.point.options?.label || this.point.options?.code || '';
           const val = (typeof this.point.value === 'number') ? this.point.value : null;
           if (val === null) {
@@ -190,7 +192,7 @@
             inactive: { opacity: 1 }
           },
           animation: false,
-          nullInteraction: true, // allow hover/click for null points
+          nullInteraction: true,   // hover/click works on null points
           enableMouseTracking: true,
           cursor: 'pointer'
         }
@@ -200,13 +202,25 @@
         data: rows,                          // [code, national, label]
         keys: ['code', 'value', 'label'],
         joinBy: ['iso-a2', 'code'],
-        allAreas: true,                      // <-- show countries even if not in data
+        allAreas: true,                      // keep every country visible (grey if null)
         borderColor: '#cfd7e6',
         nullColor: '#d9d9d9',
         states: { hover: { color: '#ffe082', animation: { duration: 0 }, halo: false } },
         dataLabels: { enabled: false },
         point: {
           events: {
+            // Force Highcharts to show the tooltip immediately on hover,
+            // even for null points and regardless of default interactions.
+            mouseOver: function () {
+              const chart = this.series.chart;
+              chart.tooltip.refresh(this);
+              this.setState('hover');
+            },
+            mouseOut: function () {
+              const chart = this.series.chart;
+              chart.tooltip.hide(0);
+              this.setState();
+            },
             click: async function () {
               const code = this.options.code;
               const display = TOTALS[code]?.name || this.name || code;
