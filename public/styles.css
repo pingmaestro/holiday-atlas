@@ -63,6 +63,8 @@ header {
 }
 .note { color: var(--muted); font-size: 12px; }
 
+.highcharts-legend-item { pointer-events: none; }
+
 /* ---- Responsive ---- */
 @media (max-width: 720px) {
   .rows .row { grid-template-columns: 120px 1fr; }

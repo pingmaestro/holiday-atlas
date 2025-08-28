@@ -1,4 +1,4 @@
-// Highcharts Maps (no D3) — full-bleed, square buttons, rounded legend labels
+// Highcharts Maps (no D3) — snappy hover, clean tooltip, null interaction, no legend dimming
 (async function () {
   const YEAR = 2025;
 
@@ -12,16 +12,13 @@
   const detailsTitle = document.getElementById('details-title');
   const detailsBody = document.getElementById('details-body');
 
-  // Render details panel (optional region filter)
   function renderDetails(iso2, displayName, holidays, regionCode = null) {
     detailsEl.style.display = 'block';
     const suffix = regionCode ? ` — ${regionCode}` : '';
     detailsTitle.textContent = `${displayName}${suffix} — Holidays (${YEAR})`;
 
     let list = holidays || [];
-    if (regionCode) {
-      list = list.filter(h => Array.isArray(h.counties) && h.counties.includes(regionCode));
-    }
+    if (regionCode) list = list.filter(h => Array.isArray(h.counties) && h.counties.includes(regionCode));
 
     if (!list.length) {
       detailsBody.innerHTML = `<div class="note">No data available.</div>`;
@@ -42,7 +39,6 @@
     detailsBody.innerHTML = rows;
   }
 
-  // Render region list below the map
   function renderRegionList(iso2) {
     const anchor = document.getElementById('region-list-anchor');
     let card = document.getElementById('region-list');
@@ -72,10 +68,9 @@
 
     rows.querySelectorAll('.region-row').forEach(el => {
       const code = el.getAttribute('data-code');
+      const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
       el.title = `${code}: ${m[code]} regional holidays`;
-      el.addEventListener('click', async () => {
-        const cacheKey = `${iso2}-${YEAR}`;
-        const holidays = detailsCache.get(cacheKey) || [];
+      el.addEventListener('click', () => {
         const countryName = (TOTALS[iso2]?.name) || iso2;
         renderDetails(iso2, countryName, holidays, code);
         detailsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -83,96 +78,73 @@
     });
   }
 
-  // Rounded integer data classes for legend (no ugly decimals)
   function makeIntegerClasses(values, steps = 6) {
     if (!values.length) return [{ to: 1, color: '#d9d9d9', name: 'No data' }];
     const min = Math.min(...values);
     const max = Math.max(...values);
-    if (min === max) {
-      return [{ from: min, color: '#3c7fd6', name: String(min) }];
-    }
+    if (min === max) return [{ from: min, color: '#3c7fd6', name: String(min) }];
     const range = max - min;
-    const rawStep = range / steps;
-    const step = Math.max(1, Math.round(rawStep)); // round to whole numbers
-
+    const step = Math.max(1, Math.round(range / steps));
     const colors = ['#e8f5e9','#ccebd6','#b3dfdf','#95cce6','#6fb4e5','#3c7fd6'];
+
     const classes = [];
     let lo = min, idx = 0;
-
     while (lo <= max && idx < colors.length) {
-      let hi = Math.min(max, lo + step - 1);
-      // Label style: "≤ X", "A–B", "≥ Y"
-      let name;
-      if (idx === 0)       name = `≤ ${hi}`;
-      else if (hi === max) name = `≥ ${lo}`;
-      else                 name = `${lo}–${hi}`;
-
+      const hi = Math.min(max, lo + step - 1);
+      const name = idx === 0 ? `≤ ${hi}` : (hi === max ? `≥ ${lo}` : `${lo}–${hi}`);
       classes.push({ from: idx === 0 ? undefined : lo, to: hi, color: colors[idx], name });
       lo = hi + 1; idx++;
     }
     return classes;
   }
 
-  // Fetch details from our serverless (cached)
   async function getCountryDetails(iso2) {
-    const cacheKey = `${iso2}-${YEAR}`;
-    if (detailsCache.has(cacheKey)) return detailsCache.get(cacheKey);
+    const key = `${iso2}-${YEAR}`;
+    if (detailsCache.has(key)) return detailsCache.get(key);
     try {
       const r = await fetch(`/api/holidayDetails?iso2=${iso2}&year=${YEAR}`);
-      if (!r.ok) throw new Error(`details ${r.status}`);
+      if (!r.ok) throw new Error(String(r.status));
       const data = await r.json();
       const list = Array.isArray(data.holidays) ? data.holidays : [];
-      detailsCache.set(cacheKey, list);
+      detailsCache.set(key, list);
       return list;
     } catch {
-      detailsCache.set(cacheKey, []);
+      detailsCache.set(key, []);
       return [];
     }
   }
 
   try {
-    // 1) Load totals JSON (cache-busted)
+    // Load totals JSON (cache-busted)
     const totalsRes = await fetch(`/data/totals-2025.json?v=${Date.now()}`, { cache: 'no-store' });
     const totalsJSON = await totalsRes.json();
     TOTALS = totalsJSON.totals || {};
     REGIONS = totalsJSON.regions || {};
 
-    // 2) Prepare series data for Highcharts
+    // Prepare series data
     const rows = Object.entries(TOTALS).map(([code, rec]) => [
       code,
       Number.isFinite(rec?.national) ? rec.national : null,
-      Number.isFinite(rec?.regional) ? rec.regional : null,
       rec?.name || code
     ]);
     const nationalValues = rows.map(r => r[1]).filter(v => v !== null);
 
-    // 3) Load Highcharts world topology
+    // Load topology
     const topology = await fetch('https://code.highcharts.com/mapdata/custom/world.topo.json').then(r => r.json());
 
-    // 4) Render map (full-bleed, square buttons, zoom stacked under burger)
     Highcharts.mapChart('wpr-map', {
       chart: {
         map: topology,
         spacing: [0, 0, 0, 0],
-        backgroundColor: 'transparent'
+        backgroundColor: 'transparent',
+        animation: false // no chart animations
       },
-      title: { text: null }, // <— remove title bar entirely
-      legend: {
-        layout: 'horizontal',
-        align: 'center',
-        verticalAlign: 'bottom',
-        itemStyle: { fontSize: '12px' }
-      },
-      credits: { enabled: true }, // keep as-is for licensing
+      title: { text: null }, // no title bar
+      credits: { enabled: true },
       exporting: {
         enabled: true,
         buttons: {
-          contextButton: {
-            align: 'right',
-            verticalAlign: 'top',
-            x: -8, y: 8,
-            theme: { r: 0 } // square burger
-          }
+          contextButton: { align: 'right', verticalAlign: 'top', x: -8, y: 8, theme: { r: 0 } }
         }
       },
       mapNavigation: {
@@ -182,18 +154,16 @@
           align: 'right',
           verticalAlign: 'top',
           x: -8,
-          theme: {
-            r: 0, // square buttons
-            'stroke-width': 1,
-            stroke: '#cfd7e6',
-            fill: '#ffffff'
-          }
+          theme: { r: 0, 'stroke-width': 1, stroke: '#cfd7e6', fill: '#ffffff' }
         },
-        // stack zoom buttons under the burger
-        buttons: {
-          zoomIn:  { y: 48 },
-          zoomOut: { y: 84 }
-        }
+        buttons: { zoomIn: { y: 48 }, zoomOut: { y: 84 } } // stack under burger
+      },
+      // Kill interactivity on legend (prevents dimming on hover)
+      legend: {
+        layout: 'horizontal',
+        align: 'center',
+        verticalAlign: 'bottom',
+        itemStyle: { fontSize: '12px' }
       },
       colorAxis: {
         dataClasses: makeIntegerClasses(nationalValues),
@@ -203,31 +173,44 @@
       tooltip: {
         useHTML: true,
         headerFormat: '',
+        animation: false,       // snappy tooltip
+        hideDelay: 0,
         formatter: function () {
-          const code = this.point.options.code;
-          const nat  = this.point.options.value ?? '—';
-          const reg  = this.point.options.regional ?? (TOTALS[code]?.regional ?? '—');
-          const name = this.point.name || this.point.options.label || code;
-          return `<strong>${Highcharts.escapeHTML(name)}</strong><br/>
-                  <span class="pill">${nat} national</span>
-                  <span class="pill" style="margin-left:6px">${reg} regional</span>`;
+          const name = this.point.name || this.point.options?.label || this.point.code || '';
+          const val = this.point.value;
+          if (val === null || typeof val === 'undefined') {
+            return `<strong>${Highcharts.escapeHTML(name)}</strong><br/><span class="pill">No data</span>`;
+          }
+          return `<strong>${Highcharts.escapeHTML(name)}</strong><br/><span class="pill">${val} national holidays</span>`;
+        }
+      },
+      plotOptions: {
+        series: {
+          states: {
+            hover: { animation: { duration: 0 }, halo: false },
+            inactive: { opacity: 1 } // don't dim others (incl. legend hover)
+          },
+          animation: false,
+          // Ensure null points (no data) still respond to hover/click
+          nullInteraction: true,
+          cursor: 'pointer'
         }
       },
       series: [{
         name: '# of National Holidays (2025)',
-        data: rows,                              // [code, national, regional, label]
-        keys: ['code', 'value', 'regional', 'label'],
-        joinBy: ['iso-a2', 'code'],             // iso-a2 is built into the TopoJSON
+        data: rows,                          // [code, national, label]
+        keys: ['code', 'value', 'label'],
+        joinBy: ['iso-a2', 'code'],
         borderColor: '#cfd7e6',
         nullColor: '#d9d9d9',
-        states: { hover: { color: '#ffe082' } },
+        states: { hover: { color: '#ffe082', animation: { duration: 0 }, halo: false } },
         dataLabels: { enabled: false },
         point: {
           events: {
             click: async function () {
               const code = this.options.code;
               const display = TOTALS[code]?.name || this.name || code;
-              if (typeof this.zoomTo === 'function') this.zoomTo(); // zoom into country
+              if (typeof this.zoomTo === 'function') this.zoomTo();
               const holidays = await getCountryDetails(code);
               renderDetails(code, display, holidays, null);
               renderRegionList(code);
