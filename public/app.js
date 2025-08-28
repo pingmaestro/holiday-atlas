@@ -274,7 +274,7 @@
 
   async function boot() {
     // One local file
-    const r = await fetch('/data/totals-2025.json');
+    const r = await fetch(`/data/totals-2025.json?v=${Date.now()}`, { cache: 'no-store' });
     const data = await r.json();
     TOTALS  = data.totals  || {};
     REGIONS = data.regions || {};
