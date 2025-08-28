@@ -3,9 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Holiday Atlas — Mapping Holidays Across The World</title>
+    <title>Holiday Atlas — National Holidays Map</title>
 
-    <!-- Styles -->
     <link rel="stylesheet" href="/styles.css" />
 
     <!-- Highcharts Maps -->
@@ -16,44 +15,20 @@
     <script src="/app.js" defer></script>
   </head>
   <body>
-    <header class="topbar">
-      <div class="container">
-        <div class="brand">Holiday Atlas - Interactive Map of National Holidays around the World</div>
-      </div>
+    <header>
+      <div class="brand">Holiday Atlas — Interactive Map of National Holidays</div>
     </header>
-    <main class="container grid">
-      <!-- MAIN COLUMN -->
-      <section>
-        <!-- Map Card -->
-        <article id="map-card" class="card">
-          <div class="hd">
-            <strong>Map — National Holidays (2025)</strong>
-          </div>
-          <div class="bd">
-            <div id="wpr-map" role="img" aria-label="Choropleth map of national holidays"></div>
-          </div>
-        </article>
 
-        <!-- Country details (appears on click) -->
-        <article id="details" class="card" style="margin-top:16px; display:none">
-          <div class="hd"><strong id="details-title">Holidays (2025)</strong></div>
-          <div class="bd"><div id="details-body" class="rows"></div></div>
-        </article>
+    <!-- Full-bleed map -->
+    <div id="wpr-map" role="img" aria-label="Choropleth map of national holidays"></div>
 
-        <!-- Region list (states/provinces) gets inserted after click -->
-        <div id="region-list-anchor"></div>
+    <!-- Country details (appears on click) -->
+    <article id="details" class="card" style="display:none">
+      <div><strong id="details-title">Holidays (2025)</strong></div>
+      <div id="details-body" class="rows"></div>
+    </article>
 
-        <!-- Methodology Card -->
-        <article id="methodology" class="card" style="margin-top:16px">
-          <div class="hd"><strong>Methodology</strong></div>
-          <div class="bd">
-            <p>
-              National counts come from the Nager.Date “Countries” table. Regional counts and per-province breakdown are computed from the 2025 PublicHolidays feed (unique dates per region).
-              The page makes one local request to a prebuilt JSON file; clicking a country fetches cached details via a serverless proxy.
-            </p>
-          </div>
-        </article>
-      </section>
-    </main>
+    <!-- Region list will be injected after first click -->
+    <div id="region-list-anchor"></div>
   </body>
 </html>
