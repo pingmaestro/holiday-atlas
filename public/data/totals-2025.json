@@ -1,0 +1,474 @@
+{
+  "year": 2025,
+  "updatedAt": "2025-08-28T00:30:24.086Z",
+  "totals": {
+    "AD": {
+      "name": "Andorra",
+      "count": 14
+    },
+    "AL": {
+      "name": "Albania",
+      "count": 14
+    },
+    "AM": {
+      "name": "Armenia",
+      "count": 14
+    },
+    "AR": {
+      "name": "Argentina",
+      "count": 16
+    },
+    "AT": {
+      "name": "Austria",
+      "count": 15
+    },
+    "AU": {
+      "name": "Australia",
+      "count": 24
+    },
+    "AX": {
+      "name": "Åland Islands",
+      "count": 16
+    },
+    "BA": {
+      "name": "Bosnia and Herzegovina",
+      "count": 15
+    },
+    "BB": {
+      "name": "Barbados",
+      "count": 12
+    },
+    "BE": {
+      "name": "Belgium",
+      "count": 14
+    },
+    "BG": {
+      "name": "Bulgaria",
+      "count": 14
+    },
+    "BJ": {
+      "name": "Benin",
+      "count": 14
+    },
+    "BO": {
+      "name": "Bolivia",
+      "count": 12
+    },
+    "BR": {
+      "name": "Brazil",
+      "count": 15
+    },
+    "BS": {
+      "name": "Bahamas",
+      "count": 11
+    },
+    "BW": {
+      "name": "Botswana",
+      "count": 11
+    },
+    "BY": {
+      "name": "Belarus",
+      "count": 10
+    },
+    "BZ": {
+      "name": "Belize",
+      "count": 14
+    },
+    "CA": {
+      "name": "Canada",
+      "count": 31
+    },
+    "CD": {
+      "name": "DR Congo",
+      "count": 11
+    },
+    "CG": {
+      "name": "Congo",
+      "count": 11
+    },
+    "CH": {
+      "name": "Switzerland",
+      "count": 33
+    },
+    "CL": {
+      "name": "Chile",
+      "count": 17
+    },
+    "CN": {
+      "name": "China",
+      "count": 6
+    },
+    "CO": {
+      "name": "Colombia",
+      "count": 18
+    },
+    "CR": {
+      "name": "Costa Rica",
+      "count": 11
+    },
+    "CU": {
+      "name": "Cuba",
+      "count": 9
+    },
+    "CY": {
+      "name": "Cyprus",
+      "count": 17
+    },
+    "CZ": {
+      "name": "Czechia",
+      "count": 13
+    },
+    "DE": {
+      "name": "Germany",
+      "count": 20
+    },
+    "DK": {
+      "name": "Denmark",
+      "count": 14
+    },
+    "DO": {
+      "name": "Dominican Republic",
+      "count": 13
+    },
+    "EC": {
+      "name": "Ecuador",
+      "count": 11
+    },
+    "EE": {
+      "name": "Estonia",
+      "count": 12
+    },
+    "EG": {
+      "name": "Egypt",
+      "count": 7
+    },
+    "ES": {
+      "name": "Spain",
+      "count": 32
+    },
+    "FI": {
+      "name": "Finland",
+      "count": 15
+    },
+    "FO": {
+      "name": "Faroe Islands",
+      "count": 17
+    },
+    "FR": {
+      "name": "France",
+      "count": 11
+    },
+    "GA": {
+      "name": "Gabon",
+      "count": 11
+    },
+    "GB": {
+      "name": "United Kingdom",
+      "count": 13
+    },
+    "GD": {
+      "name": "Grenada",
+      "count": 13
+    },
+    "GE": {
+      "name": "Georgia",
+      "count": 17
+    },
+    "GG": {
+      "name": "Guernsey",
+      "count": 9
+    },
+    "GI": {
+      "name": "Gibraltar",
+      "count": 12
+    },
+    "GL": {
+      "name": "Greenland",
+      "count": 16
+    },
+    "GM": {
+      "name": "Gambia",
+      "count": 9
+    },
+    "GR": {
+      "name": "Greece",
+      "count": 15
+    },
+    "GT": {
+      "name": "Guatemala",
+      "count": 13
+    },
+    "GY": {
+      "name": "Guyana",
+      "count": 11
+    },
+    "HK": {
+      "name": "Hong Kong",
+      "count": 17
+    },
+    "HN": {
+      "name": "Honduras",
+      "count": 11
+    },
+    "HR": {
+      "name": "Croatia",
+      "count": 14
+    },
+    "HT": {
+      "name": "Haiti",
+      "count": 20
+    },
+    "HU": {
+      "name": "Hungary",
+      "count": 13
+    },
+    "ID": {
+      "name": "Indonesia",
+      "count": 8
+    },
+    "IE": {
+      "name": "Ireland",
+      "count": 11
+    },
+    "IM": {
+      "name": "Isle of Man",
+      "count": 10
+    },
+    "IS": {
+      "name": "Iceland",
+      "count": 16
+    },
+    "IT": {
+      "name": "Italy",
+      "count": 13
+    },
+    "JE": {
+      "name": "Jersey",
+      "count": 9
+    },
+    "JM": {
+      "name": "Jamaica",
+      "count": 10
+    },
+    "JP": {
+      "name": "Japan",
+      "count": 16
+    },
+    "KR": {
+      "name": "South Korea",
+      "count": 15
+    },
+    "KZ": {
+      "name": "Kazakhstan",
+      "count": 13
+    },
+    "LI": {
+      "name": "Liechtenstein",
+      "count": 21
+    },
+    "LS": {
+      "name": "Lesotho",
+      "count": 11
+    },
+    "LT": {
+      "name": "Lithuania",
+      "count": 14
+    },
+    "LU": {
+      "name": "Luxembourg",
+      "count": 12
+    },
+    "LV": {
+      "name": "Latvia",
+      "count": 14
+    },
+    "MA": {
+      "name": "Morocco",
+      "count": 10
+    },
+    "MC": {
+      "name": "Monaco",
+      "count": 12
+    },
+    "MD": {
+      "name": "Moldova",
+      "count": 16
+    },
+    "ME": {
+      "name": "Montenegro",
+      "count": 20
+    },
+    "MG": {
+      "name": "Madagascar",
+      "count": 10
+    },
+    "MK": {
+      "name": "North Macedonia",
+      "count": 12
+    },
+    "MN": {
+      "name": "Mongolia",
+      "count": 10
+    },
+    "MS": {
+      "name": "Montserrat",
+      "count": 11
+    },
+    "MT": {
+      "name": "Malta",
+      "count": 14
+    },
+    "MX": {
+      "name": "Mexico",
+      "count": 9
+    },
+    "MZ": {
+      "name": "Mozambique",
+      "count": 9
+    },
+    "NA": {
+      "name": "Namibia",
+      "count": 13
+    },
+    "NE": {
+      "name": "Niger",
+      "count": 7
+    },
+    "NG": {
+      "name": "Nigeria",
+      "count": 10
+    },
+    "NI": {
+      "name": "Nicaragua",
+      "count": 12
+    },
+    "NL": {
+      "name": "Netherlands",
+      "count": 11
+    },
+    "NO": {
+      "name": "Norway",
+      "count": 12
+    },
+    "NZ": {
+      "name": "New Zealand",
+      "count": 23
+    },
+    "PA": {
+      "name": "Panama",
+      "count": 13
+    },
+    "PE": {
+      "name": "Peru",
+      "count": 14
+    },
+    "PG": {
+      "name": "Papua New Guinea",
+      "count": 11
+    },
+    "PH": {
+      "name": "Philippines",
+      "count": 21
+    },
+    "PL": {
+      "name": "Poland",
+      "count": 14
+    },
+    "PR": {
+      "name": "Puerto Rico",
+      "count": 21
+    },
+    "PT": {
+      "name": "Portugal",
+      "count": 17
+    },
+    "PY": {
+      "name": "Paraguay",
+      "count": 12
+    },
+    "RO": {
+      "name": "Romania",
+      "count": 17
+    },
+    "RS": {
+      "name": "Serbia",
+      "count": 11
+    },
+    "RU": {
+      "name": "Russia",
+      "count": 13
+    },
+    "SE": {
+      "name": "Sweden",
+      "count": 16
+    },
+    "SG": {
+      "name": "Singapore",
+      "count": 11
+    },
+    "SI": {
+      "name": "Slovenia",
+      "count": 21
+    },
+    "SJ": {
+      "name": "Svalbard and Jan Mayen",
+      "count": 12
+    },
+    "SK": {
+      "name": "Slovakia",
+      "count": 15
+    },
+    "SM": {
+      "name": "San Marino",
+      "count": 18
+    },
+    "SR": {
+      "name": "Suriname",
+      "count": 18
+    },
+    "SV": {
+      "name": "El Salvador",
+      "count": 26
+    },
+    "TN": {
+      "name": "Tunisia",
+      "count": 8
+    },
+    "TR": {
+      "name": "Türkiye",
+      "count": 7
+    },
+    "UA": {
+      "name": "Ukraine",
+      "count": 11
+    },
+    "US": {
+      "name": "United States",
+      "count": 16
+    },
+    "UY": {
+      "name": "Uruguay",
+      "count": 15
+    },
+    "VA": {
+      "name": "Vatican City",
+      "count": 15
+    },
+    "VE": {
+      "name": "Venezuela",
+      "count": 34
+    },
+    "VN": {
+      "name": "Vietnam",
+      "count": 4
+    },
+    "ZA": {
+      "name": "South Africa",
+      "count": 12
+    },
+    "ZW": {
+      "name": "Zimbabwe",
+      "count": 14
+    }
+  }
+}

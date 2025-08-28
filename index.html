@@ -5,13 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Holiday Atlas — Mapping Holidays Across The World</title>
 
-    <!-- Your site styles -->
     <link rel="stylesheet" href="/styles.css" />
-
-    <!-- D3 (for SVG projection/render) -->
     <script src="https://unpkg.com/d3@7/dist/d3.min.js" defer></script>
-
-    <!-- Your app code LAST -->
     <script src="/app.js" defer></script>
   </head>
   <body>
@@ -48,7 +43,7 @@
           <div class="hd">
             <strong>Map — Holidays by Country</strong>
             <div class="controls">
-               <span class="note">Year: 2025 • Scope: National (federal)</span>
+               <span class="note">Year: 2025 • Source: Nager.Date</span>
             </div>
           </div>
           <div class="bd">
@@ -61,6 +56,11 @@
             ></div>
             <div id="tip" class="tooltip" style="display:none" aria-hidden="true"></div>
           </div>
+        </article>
+
+        <article id="details" class="card" style="margin-top:16px; display:none">
+          <div class="hd"><strong id="details-title">Holidays (2025)</strong></div>
+          <div class="bd"><div id="details-body" class="rows"></div></div>
         </article>
 
         <!-- Ranking Card (placeholder for later) -->
