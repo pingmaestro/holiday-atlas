@@ -1,8 +1,15 @@
-console.log("Holiday Atlas app.js build v9");
+console.log("Holiday Atlas app.js build v10");
 
-// Highcharts Maps — force tooltip on hover, include null areas, snappy hover
+// Holiday Atlas app.js build v10
+// Highcharts Maps — snappy hover, include null areas, clean tooltip (no HC.escapeHTML)
+
 (async function () {
   const YEAR = 2025;
+
+  // --- small safe HTML escaper (fix for missing Highcharts.escapeHTML) ---
+  const esc = s => String(s).replace(/[&<>"']/g, m => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[m]));
 
   let TOTALS = {};
   let REGIONS = {};
@@ -27,7 +34,7 @@ console.log("Holiday Atlas app.js build v9");
 
     const rows = list.map(h => {
       const pretty = new Date(h.date).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
-      const nm = h.localName && h.localName !== h.name ? `${h.name} <span class="note">(${h.localName})</span>` : h.name;
+      const nm = h.localName && h.localName !== h.name ? `${esc(h.name)} <span class="note">(${esc(h.localName)})</span>` : esc(h.name);
       const scope = h.global ? 'national' : 'regional';
       return `<div class="row">
         <div class="cell">${pretty}</div>
@@ -61,7 +68,7 @@ console.log("Holiday Atlas app.js build v9");
 
     rows.innerHTML = entries.map(([code, count]) => `
       <div class="row region-row" data-code="${code}" style="cursor:pointer">
-        <div class="cell">${code}</div>
+        <div class="cell">${esc(code)}</div>
         <div class="cell"><span class="pill">${count} regional</span></div>
       </div>
     `).join('');
@@ -141,6 +148,9 @@ console.log("Holiday Atlas app.js build v9");
       },
       title: { text: null },
       credits: { enabled: true },
+      // Either add the accessibility module script, or disable the warning:
+      accessibility: { enabled: false },
+
       exporting: {
         enabled: true,
         buttons: {
@@ -173,7 +183,6 @@ console.log("Holiday Atlas app.js build v9");
         useHTML: true,
         headerFormat: '',
         followPointer: true,
-        stickOnContact: true,
         shadow: false,
         animation: false,
         hideDelay: 0,
@@ -181,20 +190,19 @@ console.log("Holiday Atlas app.js build v9");
           const name = this.point.name || this.point.options?.label || this.point.options?.code || '';
           const val = (typeof this.point.value === 'number') ? this.point.value : null;
           if (val === null) {
-            return `<strong>${Highcharts.escapeHTML(name)}</strong><br/><span class="pill">No data</span>`;
+            return `<strong>${esc(name)}</strong><br/><span class="pill">No data</span>`;
           }
-          return `<strong>${Highcharts.escapeHTML(name)}</strong><br/><span class="pill">${val} national holidays</span>`;
+          return `<strong>${esc(name)}</strong><br/><span class="pill">${val} national holidays</span>`;
         }
       },
       plotOptions: {
         series: {
-          // snappy hover + no global dimming
           states: {
             hover: { animation: { duration: 0 }, halo: false },
             inactive: { opacity: 1 }
           },
           animation: false,
-          nullInteraction: true,   // hover/click works on null points
+          nullInteraction: true,
           enableMouseTracking: true,
           cursor: 'pointer'
         }
@@ -204,16 +212,15 @@ console.log("Holiday Atlas app.js build v9");
         data: rows,                          // [code, national, label]
         keys: ['code', 'value', 'label'],
         joinBy: ['iso-a2', 'code'],
-        allAreas: true,                      // keep every country visible (grey if null)
+        allAreas: true,                      // render grey countries too
         borderColor: '#cfd7e6',
         nullColor: '#d9d9d9',
         states: { hover: { color: '#ffe082', animation: { duration: 0 }, halo: false } },
         dataLabels: { enabled: false },
         point: {
           events: {
-            // Force Highcharts to show the tooltip immediately on hover,
-            // even for null points and regardless of default interactions.
             mouseOver: function () {
+              // force tooltip to show immediately (also for null points)
               const chart = this.series.chart;
               chart.tooltip.refresh(this);
               this.setState('hover');
