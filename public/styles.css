@@ -63,6 +63,16 @@ header {
 }
 .note { color: var(--muted); font-size: 12px; }
 
+/* Keep every country fully visible (even when 'inactive' or null) */
+.highcharts-point-inactive,
+.highcharts-inactive,
+.highcharts-null-point {
+  opacity: 1 !important;
+}
+.highcharts-series.highcharts-map-series .highcharts-point {
+  opacity: 1 !important;
+}
+
 /* ---- Responsive ---- */
 @media (max-width: 720px) {
   .rows .row { grid-template-columns: 120px 1fr; }

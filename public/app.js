@@ -1,4 +1,4 @@
-console.log("Holiday Atlas app.js build v10");
+console.log("Holiday Atlas app.js build v11");
 
 // Holiday Atlas app.js build v10
 // Highcharts Maps — snappy hover, include null areas, clean tooltip (no HC.escapeHTML)
@@ -217,6 +217,7 @@ console.log("Holiday Atlas app.js build v10");
         nullColor: '#d9d9d9',
         states: { hover: { color: '#ffe082', animation: { duration: 0 }, halo: false } },
         dataLabels: { enabled: false },
+        inactiveOtherPoints: false,
         point: {
           events: {
             mouseOver: function () {
