@@ -1,6 +1,6 @@
 {
   "year": 2025,
-  "updatedAt": "2025-08-28T01:34:02.897Z",
+  "updatedAt": "2025-08-28T02:14:17.846Z",
   "totals": {
     "AD": {
       "name": "Andorra",
@@ -9,28 +9,28 @@
     },
     "AL": {
       "name": "Albania",
-      "national": 14,
+      "national": 11,
       "regional": 0
     },
     "AM": {
       "name": "Armenia",
-      "national": 14,
+      "national": 12,
       "regional": 0
     },
     "AR": {
       "name": "Argentina",
-      "national": 16,
+      "national": 15,
       "regional": 0
     },
     "AT": {
       "name": "Austria",
-      "national": 15,
+      "national": 14,
       "regional": 0
     },
     "AU": {
       "name": "Australia",
       "national": 7,
-      "regional": 17
+      "regional": 11
     },
     "AX": {
       "name": "Åland Islands",
@@ -39,7 +39,7 @@
     },
     "BA": {
       "name": "Bosnia and Herzegovina",
-      "national": 4,
+      "national": 2,
       "regional": 11
     },
     "BB": {
@@ -49,7 +49,7 @@
     },
     "BE": {
       "name": "Belgium",
-      "national": 14,
+      "national": 11,
       "regional": 0
     },
     "BG": {
@@ -64,12 +64,12 @@
     },
     "BO": {
       "name": "Bolivia",
-      "national": 12,
+      "national": 11,
       "regional": 0
     },
     "BR": {
       "name": "Brazil",
-      "national": 14,
+      "national": 12,
       "regional": 1
     },
     "BS": {
@@ -84,7 +84,7 @@
     },
     "BY": {
       "name": "Belarus",
-      "national": 10,
+      "national": 9,
       "regional": 0
     },
     "BZ": {
@@ -95,7 +95,7 @@
     "CA": {
       "name": "Canada",
       "national": 8,
-      "regional": 23
+      "regional": 12
     },
     "CD": {
       "name": "DR Congo",
@@ -119,7 +119,7 @@
     },
     "CN": {
       "name": "China",
-      "national": 6,
+      "national": 7,
       "regional": 0
     },
     "CO": {
@@ -139,7 +139,7 @@
     },
     "CY": {
       "name": "Cyprus",
-      "national": 17,
+      "national": 16,
       "regional": 0
     },
     "CZ": {
@@ -154,7 +154,7 @@
     },
     "DK": {
       "name": "Denmark",
-      "national": 14,
+      "national": 10,
       "regional": 0
     },
     "DO": {
@@ -164,7 +164,7 @@
     },
     "EC": {
       "name": "Ecuador",
-      "national": 11,
+      "national": 10,
       "regional": 0
     },
     "EE": {
@@ -180,7 +180,7 @@
     "ES": {
       "name": "Spain",
       "national": 10,
-      "regional": 22
+      "regional": 19
     },
     "FI": {
       "name": "Finland",
@@ -214,7 +214,7 @@
     },
     "GE": {
       "name": "Georgia",
-      "national": 17,
+      "national": 16,
       "regional": 0
     },
     "GG": {
@@ -229,7 +229,7 @@
     },
     "GL": {
       "name": "Greenland",
-      "national": 16,
+      "national": 12,
       "regional": 0
     },
     "GM": {
@@ -269,7 +269,7 @@
     },
     "HT": {
       "name": "Haiti",
-      "national": 20,
+      "national": 19,
       "regional": 0
     },
     "HU": {
@@ -284,7 +284,7 @@
     },
     "IE": {
       "name": "Ireland",
-      "national": 11,
+      "national": 10,
       "regional": 0
     },
     "IM": {
@@ -319,17 +319,17 @@
     },
     "KR": {
       "name": "South Korea",
-      "national": 15,
+      "national": 11,
       "regional": 0
     },
     "KZ": {
       "name": "Kazakhstan",
-      "national": 13,
+      "national": 10,
       "regional": 0
     },
     "LI": {
       "name": "Liechtenstein",
-      "national": 21,
+      "national": 16,
       "regional": 0
     },
     "LS": {
@@ -344,7 +344,7 @@
     },
     "LU": {
       "name": "Luxembourg",
-      "national": 12,
+      "national": 11,
       "regional": 0
     },
     "LV": {
@@ -364,12 +364,12 @@
     },
     "MD": {
       "name": "Moldova",
-      "national": 16,
+      "national": 15,
       "regional": 0
     },
     "ME": {
       "name": "Montenegro",
-      "national": 20,
+      "national": 4,
       "regional": 0
     },
     "MG": {
@@ -384,7 +384,7 @@
     },
     "MN": {
       "name": "Mongolia",
-      "national": 10,
+      "national": 5,
       "regional": 0
     },
     "MS": {
@@ -399,7 +399,7 @@
     },
     "MX": {
       "name": "Mexico",
-      "national": 9,
+      "national": 7,
       "regional": 0
     },
     "MZ": {
@@ -409,7 +409,7 @@
     },
     "NA": {
       "name": "Namibia",
-      "national": 13,
+      "national": 12,
       "regional": 0
     },
     "NE": {
@@ -429,7 +429,7 @@
     },
     "NL": {
       "name": "Netherlands",
-      "national": 11,
+      "national": 9,
       "regional": 0
     },
     "NO": {
@@ -440,16 +440,16 @@
     "NZ": {
       "name": "New Zealand",
       "national": 11,
-      "regional": 12
+      "regional": 11
     },
     "PA": {
       "name": "Panama",
-      "national": 13,
+      "national": 12,
       "regional": 0
     },
     "PE": {
       "name": "Peru",
-      "national": 14,
+      "national": 13,
       "regional": 0
     },
     "PG": {
@@ -474,12 +474,12 @@
     },
     "PT": {
       "name": "Portugal",
-      "national": 14,
+      "national": 13,
       "regional": 3
     },
     "PY": {
       "name": "Paraguay",
-      "national": 12,
+      "national": 11,
       "regional": 0
     },
     "RO": {
@@ -489,12 +489,12 @@
     },
     "RS": {
       "name": "Serbia",
-      "national": 11,
+      "national": 8,
       "regional": 0
     },
     "RU": {
       "name": "Russia",
-      "national": 13,
+      "national": 9,
       "regional": 0
     },
     "SE": {
@@ -504,12 +504,12 @@
     },
     "SG": {
       "name": "Singapore",
-      "national": 11,
+      "national": 10,
       "regional": 0
     },
     "SI": {
       "name": "Slovenia",
-      "national": 21,
+      "national": 13,
       "regional": 0
     },
     "SJ": {
@@ -519,7 +519,7 @@
     },
     "SK": {
       "name": "Slovakia",
-      "national": 15,
+      "national": 14,
       "regional": 0
     },
     "SM": {
@@ -534,7 +534,7 @@
     },
     "SV": {
       "name": "El Salvador",
-      "national": 26,
+      "national": 14,
       "regional": 0
     },
     "TN": {
@@ -555,11 +555,11 @@
     "US": {
       "name": "United States",
       "national": 10,
-      "regional": 5
+      "regional": 4
     },
     "UY": {
       "name": "Uruguay",
-      "national": 15,
+      "national": 14,
       "regional": 0
     },
     "VA": {
@@ -569,7 +569,7 @@
     },
     "VE": {
       "name": "Venezuela",
-      "national": 34,
+      "national": 11,
       "regional": 0
     },
     "VN": {
@@ -830,33 +830,33 @@
       "US-OH": 2,
       "US-DE": 1,
       "US-HI": 2,
-      "US-LA": 3,
-      "US-NC": 3,
+      "US-LA": 2,
+      "US-NC": 2,
       "US-ND": 1,
       "US-NJ": 2,
       "US-TN": 2,
       "US-TX": 2,
-      "US-AL": 2,
+      "US-AL": 1,
       "US-AZ": 1,
       "US-CO": 1,
       "US-GA": 1,
       "US-ID": 1,
-      "US-IA": 2,
+      "US-IA": 1,
       "US-KS": 1,
-      "US-ME": 2,
+      "US-ME": 1,
       "US-MD": 1,
       "US-MA": 1,
       "US-MS": 1,
       "US-MT": 1,
-      "US-NE": 2,
+      "US-NE": 1,
       "US-NH": 1,
-      "US-NM": 2,
-      "US-OK": 2,
+      "US-NM": 1,
+      "US-OK": 1,
       "US-PA": 1,
       "US-RI": 1,
       "US-SC": 1,
       "US-UT": 1,
-      "US-VA": 2,
+      "US-VA": 1,
       "US-WV": 1,
       "US-AK": 1,
       "US-MN": 1,
