@@ -63,12 +63,18 @@ header {
 }
 .note { color: var(--muted); font-size: 12px; }
 
-/* Keep every country fully visible (even when 'inactive' or null) */
+/* Crisper vector edges & constant stroke thickness on zoom */
+.highcharts-series.highcharts-map-series path {
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  shape-rendering: geometricPrecision;
+}
+
+/* Never fade countries (some themes dim others on hover) */
 .highcharts-point-inactive,
 .highcharts-inactive,
-.highcharts-null-point {
-  opacity: 1 !important;
-}
+.highcharts-null-point,
 .highcharts-series.highcharts-map-series .highcharts-point {
   opacity: 1 !important;
 }

@@ -1,90 +1,24 @@
-console.log("Holiday Atlas app.js build v11");
-
-// Holiday Atlas app.js build v10
-// Highcharts Maps — snappy hover, include null areas, clean tooltip (no HC.escapeHTML)
+// Holiday Atlas app.js build v12 — Highcharts Maps (crisp, all areas, snappy hover)
 
 (async function () {
   const YEAR = 2025;
 
-  // --- small safe HTML escaper (fix for missing Highcharts.escapeHTML) ---
+  // Tiny HTML escaper (some names contain special chars)
   const esc = s => String(s).replace(/[&<>"']/g, m => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[m]));
 
-  let TOTALS = {};
-  let REGIONS = {};
-  const detailsCache = new Map();
+  // State
+  let TOTALS = {};   // { FR:{ name, national, regional }, ... }
+  let REGIONS = {};  // { FR:{ 'FR-75': n, ... }, ... }
+  const detailsCache = new Map(); // "FR-2025" -> holidays[]
 
+  // Elements
   const detailsEl = document.getElementById('details');
   const detailsTitle = document.getElementById('details-title');
   const detailsBody = document.getElementById('details-body');
 
-  function renderDetails(iso2, displayName, holidays, regionCode = null) {
-    detailsEl.style.display = 'block';
-    const suffix = regionCode ? ` — ${regionCode}` : '';
-    detailsTitle.textContent = `${displayName}${suffix} — Holidays (${YEAR})`;
-
-    let list = Array.isArray(holidays) ? holidays : [];
-    if (regionCode) list = list.filter(h => Array.isArray(h.counties) && h.counties.includes(regionCode));
-
-    if (!list.length) {
-      detailsBody.innerHTML = `<div class="note">No data available.</div>`;
-      return;
-    }
-
-    const rows = list.map(h => {
-      const pretty = new Date(h.date).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
-      const nm = h.localName && h.localName !== h.name ? `${esc(h.name)} <span class="note">(${esc(h.localName)})</span>` : esc(h.name);
-      const scope = h.global ? 'national' : 'regional';
-      return `<div class="row">
-        <div class="cell">${pretty}</div>
-        <div class="cell">${nm}</div>
-        <div class="cell"><span class="pill">${scope}</span></div>
-      </div>`;
-    }).join('');
-
-    detailsBody.innerHTML = rows;
-  }
-
-  function renderRegionList(iso2) {
-    const anchor = document.getElementById('region-list-anchor');
-    let card = document.getElementById('region-list');
-    if (!card) {
-      card = document.createElement('article');
-      card.id = 'region-list';
-      card.className = 'card';
-      card.innerHTML = `<div><strong>States / Provinces</strong></div><div class="rows" id="region-rows"></div>`;
-      anchor.parentNode.insertBefore(card, anchor.nextSibling);
-    }
-
-    const rows = document.getElementById('region-rows');
-    const m = REGIONS[iso2] || {};
-    const entries = Object.entries(m).sort((a,b) => b[1] - a[1]);
-
-    if (!entries.length) {
-      rows.innerHTML = `<div class="note">No regional breakdown available.</div>`;
-      return;
-    }
-
-    rows.innerHTML = entries.map(([code, count]) => `
-      <div class="row region-row" data-code="${code}" style="cursor:pointer">
-        <div class="cell">${esc(code)}</div>
-        <div class="cell"><span class="pill">${count} regional</span></div>
-      </div>
-    `).join('');
-
-    rows.querySelectorAll('.region-row').forEach(el => {
-      const code = el.getAttribute('data-code');
-      el.title = `${code}: ${m[code]} regional holidays`;
-      el.addEventListener('click', () => {
-        const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
-        const countryName = (TOTALS[iso2]?.name) || iso2;
-        renderDetails(iso2, countryName, holidays, code);
-        detailsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    });
-  }
-
+  // ----- Helpers -----
   function makeIntegerClasses(values, steps = 6) {
     if (!values.length) return [{ to: 1, color: '#d9d9d9', name: 'No data' }];
     const min = Math.min(...values);
@@ -121,24 +55,95 @@ console.log("Holiday Atlas app.js build v11");
     }
   }
 
+  function renderDetails(iso2, displayName, holidays, regionCode = null) {
+    detailsEl.style.display = 'block';
+    const suffix = regionCode ? ` — ${regionCode}` : '';
+    detailsTitle.textContent = `${displayName}${suffix} — Holidays (${YEAR})`;
+
+    let list = Array.isArray(holidays) ? holidays : [];
+    if (regionCode) list = list.filter(h => Array.isArray(h.counties) && h.counties.includes(regionCode));
+
+    if (!list.length) {
+      detailsBody.innerHTML = `<div class="note">No data available.</div>`;
+      return;
+    }
+
+    const rows = list.map(h => {
+      const pretty = new Date(h.date).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
+      const nm = h.localName && h.localName !== h.name
+        ? `${esc(h.name)} <span class="note">(${esc(h.localName)})</span>`
+        : esc(h.name);
+      const scope = h.global ? 'national' : 'regional';
+      return `<div class="row">
+        <div class="cell">${pretty}</div>
+        <div class="cell">${nm}</div>
+        <div class="cell"><span class="pill">${scope}</span></div>
+      </div>`;
+    }).join('');
+
+    detailsBody.innerHTML = rows;
+  }
+
+  function renderRegionList(iso2) {
+    const anchor = document.getElementById('region-list-anchor');
+    let card = document.getElementById('region-list');
+    if (!card) {
+      card = document.createElement('article');
+      card.id = 'region-list';
+      card.className = 'card';
+      card.innerHTML = `<div><strong>States / Provinces</strong></div><div class="rows" id="region-rows"></div>`;
+      anchor.parentNode.insertBefore(card, anchor.nextSibling);
+    }
+
+    const rows = document.getElementById('region-rows');
+    const m = REGIONS[iso2] || {};
+    const entries = Object.entries(m).sort((a,b) => b[1] - a[1]);
+
+    if (!entries.length) {
+      rows.innerHTML = `<div class="note">No regional breakdown available.</div>`;
+      return;
+    }
+
+    rows.innerHTML = entries.map(([code, count]) => `
+      <div class="row region-row" data-code="${esc(code)}" style="cursor:pointer">
+        <div class="cell">${esc(code)}</div>
+        <div class="cell"><span class="pill">${count} regional</span></div>
+      </div>
+    `).join('');
+
+    rows.querySelectorAll('.region-row').forEach(el => {
+      const code = el.getAttribute('data-code');
+      el.title = `${code}: ${m[code]} regional holidays`;
+      el.addEventListener('click', () => {
+        const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
+        const countryName = (TOTALS[iso2]?.name) || iso2;
+        renderDetails(iso2, countryName, holidays, code);
+        detailsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  }
+
   try {
-    // Load totals JSON (cache-busted)
+    // 1) Load totals JSON (cache-busted)
+    console.log("Holiday Atlas app.js build v12");
     const totalsRes = await fetch(`/data/totals-2025.json?v=${Date.now()}`, { cache: 'no-store' });
     const totalsJSON = await totalsRes.json();
-    TOTALS = totalsJSON.totals || {};
+    TOTALS  = totalsJSON.totals  || {};
     REGIONS = totalsJSON.regions || {};
 
-    // Build data rows: [code, national, label]
+    // 2) Build series data using hc-key (lowercased ISO2)
     const rows = Object.entries(TOTALS).map(([code, rec]) => [
-      code,
+      code.toLowerCase(),                              // hc-key
       Number.isFinite(rec?.national) ? rec.national : null,
       rec?.name || code
     ]);
     const nationalValues = rows.map(r => r[1]).filter(v => v !== null);
 
-    // Load world topology
-    const topology = await fetch('https://code.highcharts.com/mapdata/custom/world.topo.json').then(r => r.json());
+    // 3) Load a high-res Robinson world map (crisper)
+    const topology = await fetch('https://code.highcharts.com/mapdata/custom/world-robinson-highres.topo.json')
+      .then(r => r.json());
 
+    // 4) Render map
     Highcharts.mapChart('wpr-map', {
       chart: {
         map: topology,
@@ -148,7 +153,6 @@ console.log("Holiday Atlas app.js build v11");
       },
       title: { text: null },
       credits: { enabled: true },
-      // Either add the accessibility module script, or disable the warning:
       accessibility: { enabled: false },
 
       exporting: {
@@ -187,12 +191,11 @@ console.log("Holiday Atlas app.js build v11");
         animation: false,
         hideDelay: 0,
         formatter: function () {
-          const name = this.point.name || this.point.options?.label || this.point.options?.code || '';
+          const name = this.point.name || this.point.options?.label || (this.point.options && this.point.options['hc-key'] ? this.point.options['hc-key'].toUpperCase() : '');
           const val = (typeof this.point.value === 'number') ? this.point.value : null;
-          if (val === null) {
-            return `<strong>${esc(name)}</strong><br/><span class="pill">No data</span>`;
-          }
-          return `<strong>${esc(name)}</strong><br/><span class="pill">${val} national holidays</span>`;
+          return val == null
+            ? `<strong>${esc(name)}</strong><br/><span class="pill">No data</span>`
+            : `<strong>${esc(name)}</strong><br/><span class="pill">${val} national holidays</span>`;
         }
       },
       plotOptions: {
@@ -208,37 +211,49 @@ console.log("Holiday Atlas app.js build v11");
         }
       },
       series: [{
-        name: '# of National Holidays (2025)',
-        data: rows,                          // [code, national, label]
-        keys: ['code', 'value', 'label'],
-        joinBy: ['iso-a2', 'code'],
-        allAreas: true,                      // render grey countries too
+        type: 'map',
+        mapData: topology,
+        data: rows,                                  // [hc-key, value, label]
+        keys: ['hc-key','value','label'],
+        joinBy: ['hc-key','hc-key'],                 // join by hc-key so all shapes are present
+        allAreas: true,                              // draw countries even without data
         borderColor: '#cfd7e6',
-        nullColor: '#d9d9d9',
+        borderWidth: 0.6,
         states: { hover: { color: '#ffe082', animation: { duration: 0 }, halo: false } },
         dataLabels: { enabled: false },
-        inactiveOtherPoints: false,
+        inactiveOtherPoints: false,                  // never dim the rest on hover
         point: {
           events: {
             mouseOver: function () {
-              // force tooltip to show immediately (also for null points)
-              const chart = this.series.chart;
-              chart.tooltip.refresh(this);
+              // Force snappy tooltip, including for null points
+              const c = this.series.chart;
+              c.tooltip.refresh(this);
               this.setState('hover');
             },
             mouseOut: function () {
-              const chart = this.series.chart;
-              chart.tooltip.hide(0);
+              const c = this.series.chart;
+              c.tooltip.hide(0);
               this.setState();
             },
             click: async function () {
-              const code = this.options.code;
-              const display = TOTALS[code]?.name || this.name || code;
+              const hcKey = (this.options['hc-key'] || this['hc-key'] || '').toUpperCase();
+              const iso2  = hcKey; // hc-key is ISO2 lowercased in map, so uppercase it for API
+              const display = (TOTALS[iso2]?.name) || this.name || iso2;
+
               if (typeof this.zoomTo === 'function') this.zoomTo();
-              const holidays = await getCountryDetails(code);
-              renderDetails(code, display, holidays, null);
-              renderRegionList(code);
-              detailsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+              try {
+                const r = await fetch(`/api/holidayDetails?iso2=${iso2}&year=${YEAR}`);
+                const data = r.ok ? await r.json() : { holidays: [] };
+                const holidays = Array.isArray(data.holidays) ? data.holidays : [];
+                detailsCache.set(`${iso2}-${YEAR}`, holidays);
+                renderDetails(iso2, display, holidays, null);
+                renderRegionList(iso2);
+                detailsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              } catch {
+                renderDetails(iso2, display, [], null);
+                renderRegionList(iso2);
+              }
             }
           }
         }
