@@ -1,3 +1,5 @@
+console.log("Holiday Atlas app.js build v9");
+
 // Highcharts Maps — force tooltip on hover, include null areas, snappy hover
 (async function () {
   const YEAR = 2025;
