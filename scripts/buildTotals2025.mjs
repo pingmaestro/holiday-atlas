@@ -1,7 +1,9 @@
 // scripts/buildTotals2025.mjs
-// National counts = Nager "Countries" table (stable, what users expect)
-// Regional counts = from 2025 PublicHolidays (unique dates per region)
-// Output: public/data/totals-2025.json  -> { year, updatedAt, totals, regions }
+// Build 2025 totals from Nager.Date.
+// - NATIONAL: prefer Nager Countries table number; fallback to API (unique dates with global:true).
+// - REGIONAL: from API (unique dates with global:false and counties present).
+// - Per-region breakdown: unique dates per ISO-3166-2 code.
+// Output: public/data/totals-2025.json
 
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -20,66 +22,110 @@ async function fetchJSON(url) {
   return r.json();
 }
 
-// Parse https://date.nager.at/Country table into { US:10, FR:11, VE:11, ... }
+// --- Robustly parse https://date.nager.at/Country ---
+// Returns a map: { "FR": 11, "VE": 11, ... }
 async function getBaselineNationalCounts() {
   const html = await fetchText("https://date.nager.at/Country");
+
+  // Split by table rows, then extract the first three <td> values (name, code, count)
+  const rows = html.split(/<tr[\s>]/i).slice(1); // skip header split chunk
   const map = {};
-  // crude but effective: rows like "<td>Venezuela</td><td>VE</td><td>11</td>"
-  const rowRe = /<tr>\s*<td>(.*?)<\/td>\s*<td>([A-Z]{2})<\/td>\s*<td>(\d+)<\/td>/g;
-  for (const m of html.matchAll(rowRe)) {
-    const code = m[2].toUpperCase();
-    const num = parseInt(m[3], 10);
-    map[code] = num;
+
+  for (const row of rows) {
+    const tds = [...row.matchAll(/<td[^>]*>(.*?)<\/td>/gis)].map(m =>
+      m[1].replace(/<[^>]*>/g, "").trim() // strip nested tags, keep text
+    );
+    if (tds.length < 3) continue;
+
+    const code = (tds[1] || "").toUpperCase().replace(/[^A-Z]/g, "");
+    const num  = parseInt(tds[2], 10);
+    if (/^[A-Z]{2}$/.test(code) && Number.isInteger(num)) {
+      map[code] = num;
+    }
   }
-  if (!map.FR || !map.VE) throw new Error("Failed to parse baseline table");
+
   return map;
 }
 
+// Unique-date national count from the API (fallback)
+function nationalFromAPI(rows) {
+  const publicRows = (Array.isArray(rows) ? rows : []).filter(h => {
+    const types = Array.isArray(h?.types) ? h.types : ["Public"];
+    return types.some(t => /public/i.test(String(t)));
+  });
+  const dates = new Set(publicRows.filter(h => h?.global === true).map(h => h.date));
+  return dates.size;
+}
+
+function regionalFromAPI(rows) {
+  const publicRows = (Array.isArray(rows) ? rows : []).filter(h => {
+    const types = Array.isArray(h?.types) ? h.types : ["Public"];
+    return types.some(t => /public/i.test(String(t)));
+  });
+
+  // Unique regional dates across the country
+  const regionalDates = new Set(
+    publicRows
+      .filter(h => h?.global === false && Array.isArray(h.counties) && h.counties.length)
+      .map(h => h.date)
+  );
+
+  // Unique dates per region code
+  const perRegionSets = {};
+  for (const h of publicRows) {
+    if (h?.global === false && Array.isArray(h.counties)) {
+      for (const c of h.counties) {
+        const code = String(c).toUpperCase();
+        (perRegionSets[code] ||= new Set()).add(h.date);
+      }
+    }
+  }
+  const perRegionCounts = Object.fromEntries(
+    Object.entries(perRegionSets).map(([k, s]) => [k, s.size])
+  );
+
+  return { regionalCount: regionalDates.size, perRegionCounts };
+}
+
 async function main() {
-  const baseline = await getBaselineNationalCounts(); // official counts
+  const baseline = await getBaselineNationalCounts(); // what the site shows
   const countries = await fetchJSON("https://date.nager.at/api/v3/AvailableCountries"); // [{countryCode,name}]
+
   const totals  = {};
   const regions = {};
+  const fellBack = []; // codes where we used API fallback for national
 
   for (const { countryCode, name } of countries) {
-    const code = countryCode.toUpperCase();
-    // default to baseline national (so map aligns with Nager site)
-    const baselineNational = baseline[code] ?? null;
+    const code = String(countryCode).toUpperCase();
 
-    // Build regional stats from 2025 feed
-    let regionalCount = null;
+    let nat = baseline[code]; // prefer baseline
+    let reg = null;
     let perRegion = {};
+
     try {
-      const arr = await fetchJSON(`https://date.nager.at/api/v3/PublicHolidays/${YEAR}/${code}`);
-      const rows = Array.isArray(arr) ? arr : [];
+      const rows = await fetchJSON(`https://date.nager.at/api/v3/PublicHolidays/${YEAR}/${code}`);
 
-      // regional = unique dates where counties exist and global === false
-      const regionalDates = new Set(
-        rows
-          .filter(h => h?.global === false && Array.isArray(h.counties) && h.counties.length)
-          .map(h => h.date)
-      );
-
-      // per-region = unique dates per ISO-3166-2 code
-      const perRegionSets = {};
-      for (const h of rows) {
-        if (h?.global === false && Array.isArray(h.counties)) {
-          for (const c of h.counties) {
-            (perRegionSets[String(c).toUpperCase()] ||= new Set()).add(h.date);
-          }
-        }
+      if (!Number.isInteger(nat)) {
+        nat = nationalFromAPI(rows);
+        fellBack.push(code);
       }
-      perRegion = Object.fromEntries(
-        Object.entries(perRegionSets).map(([k, s]) => [k, s.size])
-      );
-      regionalCount = regionalDates.size;
+
+      const { regionalCount, perRegionCounts } = regionalFromAPI(rows);
+      reg = regionalCount;
+      perRegion = perRegionCounts;
     } catch {
-      regionalCount = null;
+      // If the API hiccups, keep national as baseline (if present), and leave regional null.
+      if (!Number.isInteger(nat)) nat = null;
+      reg = null;
       perRegion = {};
     }
 
-    totals[code]  = { name, national: baselineNational, regional: regionalCount };
+    totals[code]  = { name, national: nat, regional: reg };
     regions[code] = perRegion;
+  }
+
+  if (fellBack.length) {
+    console.log(`Baseline missing for (used API fallback): ${fellBack.join(", ")}`);
   }
 
   const out = { year: YEAR, updatedAt: new Date().toISOString(), totals, regions };
