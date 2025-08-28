@@ -62,7 +62,7 @@
     detailsBody.innerHTML = rows;
   }
 
-  // ---------- Build region list UI under the map on click ----------
+  // ---------- Region list UI under the map after click ----------
   function renderRegionList(iso2) {
     const mapBelow = document.getElementById('region-list') || (() => {
       const el = document.createElement('div');
@@ -76,7 +76,7 @@
 
     const rows = document.getElementById('region-rows');
     const m = REGIONS[iso2] || {};
-    const entries = Object.entries(m).sort((a,b) => b[1] - a[1]); // desc by count
+    const entries = Object.entries(m).sort((a,b) => b[1] - a[1]); // desc
 
     if (!entries.length) {
       rows.innerHTML = `<div class="note">No regional breakdown available.</div>`;
@@ -90,7 +90,6 @@
       </div>
     `).join('');
 
-    // Hover shows a small native title; click filters details
     rows.querySelectorAll('.region-row').forEach(el => {
       const code = el.getAttribute('data-code');
       el.title = `${code}: ${m[code]} regional holidays`;
@@ -104,7 +103,7 @@
     });
   }
 
-  // ---------- Map render (static SVG, country zoom on click) ----------
+  // ---------- Map render (choropleth + zoom on click) ----------
   async function renderMap() {
     mapHost.innerHTML = '';
 
@@ -127,10 +126,21 @@
 
     projection.fitSize([width, height], geo);
 
-    const fillNormal = '#f6f9ff';
-    const fillHover  = '#e9f1ff';
-    const stroke     = '#cfd7e6';
+    // ----- Build color scale from national counts -----
+    const hasCount = Object.entries(TOTALS)
+      .map(([_, v]) => v && Number.isFinite(v.national) ? v.national : null)
+      .filter(v => v !== null);
 
+    const min = hasCount.length ? d3.min(hasCount) : 0;
+    const max = hasCount.length ? d3.max(hasCount) : 1;
+    const domain = (min === max) ? [min, min + 1] : [min, max];
+
+    // 7-step green->blue palette (light to dark)
+    const palette = d3.range(0, 1.00001, 1 / 6).map(t => d3.interpolateGnBu(t));
+    const color = d3.scaleQuantize().domain(domain).range(palette);
+    const noDataFill = '#d9d9d9'; // gray for missing data
+
+    // ----- Draw countries -----
     const g = svg.append('g');
 
     const countries = g.selectAll('path.country')
@@ -139,16 +149,21 @@
       .append('path')
       .attr('class', 'country')
       .attr('d', path)
-      .attr('fill', fillNormal)
-      .attr('stroke', stroke)
+      .attr('fill', d => {
+        const iso = getISO2(d.properties || {});
+        const rec = iso && TOTALS[iso];
+        const n = rec && Number.isFinite(rec.national) ? rec.national : null;
+        return n === null ? noDataFill : color(n);
+      })
+      .attr('stroke', '#cfd7e6')
       .attr('stroke-width', 0.6)
       .attr('vector-effect', 'non-scaling-stroke')
       .style('cursor', 'pointer');
 
-    // Hover: show national + regional counts
+    // Hover: keep fill, just thicken stroke + tooltip (national + regional)
     countries
       .on('mousemove', function (event, d) {
-        d3.select(this).attr('fill', fillHover);
+        d3.select(this).attr('stroke-width', 1.0);
         const p = d.properties || {};
         const iso2 = getISO2(p);
         const fallbackName = getName(p);
@@ -167,18 +182,17 @@
         );
       })
       .on('mouseout', function () {
-        d3.select(this).attr('fill', fillNormal);
+        d3.select(this).attr('stroke-width', 0.6);
         hideTip();
       })
       .on('click', async function (event, d) {
-        // Zoom to country
+        // Zoom to country bounds
         const b = path.bounds(d); // [[x0,y0],[x1,y1]]
         const dx = b[1][0] - b[0][0];
         const dy = b[1][1] - b[0][1];
         const cx = (b[0][0] + b[1][0]) / 2;
         const cy = (b[0][1] + b[1][1]) / 2;
         const scale = 0.9 / Math.max(dx / width, dy / height);
-
         g.transition().duration(550)
           .attr('transform', `translate(${width/2},${height/2}) scale(${scale}) translate(${-cx},${-cy})`);
 
@@ -187,7 +201,7 @@
         const name = (iso2 && TOTALS[iso2]?.name) || getName(p);
         if (!iso2) return;
 
-        // Fetch details if not cached, then render full list
+        // Fetch Nager.Date details if not cached
         const cacheKey = `${iso2}-${YEAR}`;
         if (!detailsCache.has(cacheKey)) {
           try {
@@ -208,6 +222,49 @@
     svg.on('dblclick', () => {
       g.transition().duration(400).attr('transform', null);
     });
+
+    // ----- Legend (discrete swatches) -----
+    const legend = svg.append('g')
+      .attr('transform', `translate(${width/2 - 140}, ${height - 28})`);
+
+    const sw = 32, sh = 10, gap = 4;
+    const thresholds = color.thresholds ? color.thresholds() : [];
+    const labels = [domain[0], ...thresholds, domain[1]];
+
+    legend.selectAll('rect.swatch')
+      .data(palette)
+      .enter()
+      .append('rect')
+      .attr('class', 'swatch')
+      .attr('x', (_, i) => i * (sw + gap))
+      .attr('y', 0)
+      .attr('width', sw)
+      .attr('height', sh)
+      .attr('fill', d => d)
+      .attr('stroke', '#cfd7e6');
+
+    // min + max labels
+    legend.append('text')
+      .attr('x', 0).attr('y', sh + 12)
+      .attr('class', 'note')
+      .style('font-size', '12px')
+      .text(Math.round(domain[0]));
+
+    legend.append('text')
+      .attr('x', (palette.length - 1) * (sw + gap))
+      .attr('y', sh + 12)
+      .attr('class', 'note')
+      .style('text-anchor', 'end')
+      .style('font-size', '12px')
+      .text(Math.round(domain[1]));
+
+    legend.append('text')
+      .attr('x', (palette.length * (sw + gap)) / 2)
+      .attr('y', sh + 26)
+      .attr('class', 'note')
+      .style('text-anchor', 'middle')
+      .style('font-size', '12px')
+      .text('# of National Holidays');
 
     // Redraw on resize
     let t; window.addEventListener('resize', () => {
