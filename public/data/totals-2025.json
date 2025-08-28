@@ -1,474 +1,875 @@
 {
   "year": 2025,
-  "updatedAt": "2025-08-28T00:30:24.086Z",
+  "updatedAt": "2025-08-28T01:34:02.897Z",
   "totals": {
     "AD": {
       "name": "Andorra",
-      "count": 14
+      "national": 14,
+      "regional": 0
     },
     "AL": {
       "name": "Albania",
-      "count": 14
+      "national": 14,
+      "regional": 0
     },
     "AM": {
       "name": "Armenia",
-      "count": 14
+      "national": 14,
+      "regional": 0
     },
     "AR": {
       "name": "Argentina",
-      "count": 16
+      "national": 16,
+      "regional": 0
     },
     "AT": {
       "name": "Austria",
-      "count": 15
+      "national": 15,
+      "regional": 0
     },
     "AU": {
       "name": "Australia",
-      "count": 24
+      "national": 7,
+      "regional": 17
     },
     "AX": {
       "name": "Åland Islands",
-      "count": 16
+      "national": 16,
+      "regional": 0
     },
     "BA": {
       "name": "Bosnia and Herzegovina",
-      "count": 15
+      "national": 4,
+      "regional": 11
     },
     "BB": {
       "name": "Barbados",
-      "count": 12
+      "national": 12,
+      "regional": 0
     },
     "BE": {
       "name": "Belgium",
-      "count": 14
+      "national": 14,
+      "regional": 0
     },
     "BG": {
       "name": "Bulgaria",
-      "count": 14
+      "national": 14,
+      "regional": 0
     },
     "BJ": {
       "name": "Benin",
-      "count": 14
+      "national": 14,
+      "regional": 0
     },
     "BO": {
       "name": "Bolivia",
-      "count": 12
+      "national": 12,
+      "regional": 0
     },
     "BR": {
       "name": "Brazil",
-      "count": 15
+      "national": 14,
+      "regional": 1
     },
     "BS": {
       "name": "Bahamas",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "BW": {
       "name": "Botswana",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "BY": {
       "name": "Belarus",
-      "count": 10
+      "national": 10,
+      "regional": 0
     },
     "BZ": {
       "name": "Belize",
-      "count": 14
+      "national": 14,
+      "regional": 0
     },
     "CA": {
       "name": "Canada",
-      "count": 31
+      "national": 8,
+      "regional": 23
     },
     "CD": {
       "name": "DR Congo",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "CG": {
       "name": "Congo",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "CH": {
       "name": "Switzerland",
-      "count": 33
+      "national": 4,
+      "regional": 19
     },
     "CL": {
       "name": "Chile",
-      "count": 17
+      "national": 16,
+      "regional": 1
     },
     "CN": {
       "name": "China",
-      "count": 6
+      "national": 6,
+      "regional": 0
     },
     "CO": {
       "name": "Colombia",
-      "count": 18
+      "national": 18,
+      "regional": 0
     },
     "CR": {
       "name": "Costa Rica",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "CU": {
       "name": "Cuba",
-      "count": 9
+      "national": 9,
+      "regional": 0
     },
     "CY": {
       "name": "Cyprus",
-      "count": 17
+      "national": 17,
+      "regional": 0
     },
     "CZ": {
       "name": "Czechia",
-      "count": 13
+      "national": 13,
+      "regional": 0
     },
     "DE": {
       "name": "Germany",
-      "count": 20
+      "national": 9,
+      "regional": 11
     },
     "DK": {
       "name": "Denmark",
-      "count": 14
+      "national": 14,
+      "regional": 0
     },
     "DO": {
       "name": "Dominican Republic",
-      "count": 13
+      "national": 13,
+      "regional": 0
     },
     "EC": {
       "name": "Ecuador",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "EE": {
       "name": "Estonia",
-      "count": 12
+      "national": 12,
+      "regional": 0
     },
     "EG": {
       "name": "Egypt",
-      "count": 7
+      "national": 7,
+      "regional": 0
     },
     "ES": {
       "name": "Spain",
-      "count": 32
+      "national": 10,
+      "regional": 22
     },
     "FI": {
       "name": "Finland",
-      "count": 15
+      "national": 15,
+      "regional": 0
     },
     "FO": {
       "name": "Faroe Islands",
-      "count": 17
+      "national": 17,
+      "regional": 0
     },
     "FR": {
       "name": "France",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "GA": {
       "name": "Gabon",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "GB": {
       "name": "United Kingdom",
-      "count": 13
+      "national": 5,
+      "regional": 8
     },
     "GD": {
       "name": "Grenada",
-      "count": 13
+      "national": 13,
+      "regional": 0
     },
     "GE": {
       "name": "Georgia",
-      "count": 17
+      "national": 17,
+      "regional": 0
     },
     "GG": {
       "name": "Guernsey",
-      "count": 9
+      "national": 9,
+      "regional": 0
     },
     "GI": {
       "name": "Gibraltar",
-      "count": 12
+      "national": 12,
+      "regional": 0
     },
     "GL": {
       "name": "Greenland",
-      "count": 16
+      "national": 16,
+      "regional": 0
     },
     "GM": {
       "name": "Gambia",
-      "count": 9
+      "national": 9,
+      "regional": 0
     },
     "GR": {
       "name": "Greece",
-      "count": 15
+      "national": 15,
+      "regional": 0
     },
     "GT": {
       "name": "Guatemala",
-      "count": 13
+      "national": 13,
+      "regional": 0
     },
     "GY": {
       "name": "Guyana",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "HK": {
       "name": "Hong Kong",
-      "count": 17
+      "national": 17,
+      "regional": 0
     },
     "HN": {
       "name": "Honduras",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "HR": {
       "name": "Croatia",
-      "count": 14
+      "national": 14,
+      "regional": 0
     },
     "HT": {
       "name": "Haiti",
-      "count": 20
+      "national": 20,
+      "regional": 0
     },
     "HU": {
       "name": "Hungary",
-      "count": 13
+      "national": 13,
+      "regional": 0
     },
     "ID": {
       "name": "Indonesia",
-      "count": 8
+      "national": 8,
+      "regional": 0
     },
     "IE": {
       "name": "Ireland",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "IM": {
       "name": "Isle of Man",
-      "count": 10
+      "national": 10,
+      "regional": 0
     },
     "IS": {
       "name": "Iceland",
-      "count": 16
+      "national": 16,
+      "regional": 0
     },
     "IT": {
       "name": "Italy",
-      "count": 13
+      "national": 12,
+      "regional": 1
     },
     "JE": {
       "name": "Jersey",
-      "count": 9
+      "national": 9,
+      "regional": 0
     },
     "JM": {
       "name": "Jamaica",
-      "count": 10
+      "national": 10,
+      "regional": 0
     },
     "JP": {
       "name": "Japan",
-      "count": 16
+      "national": 16,
+      "regional": 0
     },
     "KR": {
       "name": "South Korea",
-      "count": 15
+      "national": 15,
+      "regional": 0
     },
     "KZ": {
       "name": "Kazakhstan",
-      "count": 13
+      "national": 13,
+      "regional": 0
     },
     "LI": {
       "name": "Liechtenstein",
-      "count": 21
+      "national": 21,
+      "regional": 0
     },
     "LS": {
       "name": "Lesotho",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "LT": {
       "name": "Lithuania",
-      "count": 14
+      "national": 14,
+      "regional": 0
     },
     "LU": {
       "name": "Luxembourg",
-      "count": 12
+      "national": 12,
+      "regional": 0
     },
     "LV": {
       "name": "Latvia",
-      "count": 14
+      "national": 14,
+      "regional": 0
     },
     "MA": {
       "name": "Morocco",
-      "count": 10
+      "national": 10,
+      "regional": 0
     },
     "MC": {
       "name": "Monaco",
-      "count": 12
+      "national": 12,
+      "regional": 0
     },
     "MD": {
       "name": "Moldova",
-      "count": 16
+      "national": 16,
+      "regional": 0
     },
     "ME": {
       "name": "Montenegro",
-      "count": 20
+      "national": 20,
+      "regional": 0
     },
     "MG": {
       "name": "Madagascar",
-      "count": 10
+      "national": 10,
+      "regional": 0
     },
     "MK": {
       "name": "North Macedonia",
-      "count": 12
+      "national": 12,
+      "regional": 0
     },
     "MN": {
       "name": "Mongolia",
-      "count": 10
+      "national": 10,
+      "regional": 0
     },
     "MS": {
       "name": "Montserrat",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "MT": {
       "name": "Malta",
-      "count": 14
+      "national": 14,
+      "regional": 0
     },
     "MX": {
       "name": "Mexico",
-      "count": 9
+      "national": 9,
+      "regional": 0
     },
     "MZ": {
       "name": "Mozambique",
-      "count": 9
+      "national": 9,
+      "regional": 0
     },
     "NA": {
       "name": "Namibia",
-      "count": 13
+      "national": 13,
+      "regional": 0
     },
     "NE": {
       "name": "Niger",
-      "count": 7
+      "national": 7,
+      "regional": 0
     },
     "NG": {
       "name": "Nigeria",
-      "count": 10
+      "national": 10,
+      "regional": 0
     },
     "NI": {
       "name": "Nicaragua",
-      "count": 12
+      "national": 12,
+      "regional": 0
     },
     "NL": {
       "name": "Netherlands",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "NO": {
       "name": "Norway",
-      "count": 12
+      "national": 12,
+      "regional": 0
     },
     "NZ": {
       "name": "New Zealand",
-      "count": 23
+      "national": 11,
+      "regional": 12
     },
     "PA": {
       "name": "Panama",
-      "count": 13
+      "national": 13,
+      "regional": 0
     },
     "PE": {
       "name": "Peru",
-      "count": 14
+      "national": 14,
+      "regional": 0
     },
     "PG": {
       "name": "Papua New Guinea",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "PH": {
       "name": "Philippines",
-      "count": 21
+      "national": 21,
+      "regional": 0
     },
     "PL": {
       "name": "Poland",
-      "count": 14
+      "national": 14,
+      "regional": 0
     },
     "PR": {
       "name": "Puerto Rico",
-      "count": 21
+      "national": 21,
+      "regional": 0
     },
     "PT": {
       "name": "Portugal",
-      "count": 17
+      "national": 14,
+      "regional": 3
     },
     "PY": {
       "name": "Paraguay",
-      "count": 12
+      "national": 12,
+      "regional": 0
     },
     "RO": {
       "name": "Romania",
-      "count": 17
+      "national": 17,
+      "regional": 0
     },
     "RS": {
       "name": "Serbia",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "RU": {
       "name": "Russia",
-      "count": 13
+      "national": 13,
+      "regional": 0
     },
     "SE": {
       "name": "Sweden",
-      "count": 16
+      "national": 16,
+      "regional": 0
     },
     "SG": {
       "name": "Singapore",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "SI": {
       "name": "Slovenia",
-      "count": 21
+      "national": 21,
+      "regional": 0
     },
     "SJ": {
       "name": "Svalbard and Jan Mayen",
-      "count": 12
+      "national": 12,
+      "regional": 0
     },
     "SK": {
       "name": "Slovakia",
-      "count": 15
+      "national": 15,
+      "regional": 0
     },
     "SM": {
       "name": "San Marino",
-      "count": 18
+      "national": 18,
+      "regional": 0
     },
     "SR": {
       "name": "Suriname",
-      "count": 18
+      "national": 18,
+      "regional": 0
     },
     "SV": {
       "name": "El Salvador",
-      "count": 26
+      "national": 26,
+      "regional": 0
     },
     "TN": {
       "name": "Tunisia",
-      "count": 8
+      "national": 8,
+      "regional": 0
     },
     "TR": {
       "name": "Türkiye",
-      "count": 7
+      "national": 7,
+      "regional": 0
     },
     "UA": {
       "name": "Ukraine",
-      "count": 11
+      "national": 11,
+      "regional": 0
     },
     "US": {
       "name": "United States",
-      "count": 16
+      "national": 10,
+      "regional": 5
     },
     "UY": {
       "name": "Uruguay",
-      "count": 15
+      "national": 15,
+      "regional": 0
     },
     "VA": {
       "name": "Vatican City",
-      "count": 15
+      "national": 15,
+      "regional": 0
     },
     "VE": {
       "name": "Venezuela",
-      "count": 34
+      "national": 34,
+      "regional": 0
     },
     "VN": {
       "name": "Vietnam",
-      "count": 4
+      "national": 4,
+      "regional": 0
     },
     "ZA": {
       "name": "South Africa",
-      "count": 12
+      "national": 12,
+      "regional": 0
     },
     "ZW": {
       "name": "Zimbabwe",
-      "count": 14
+      "national": 14,
+      "regional": 0
     }
+  },
+  "regions": {
+    "AD": {},
+    "AL": {},
+    "AM": {},
+    "AR": {},
+    "AT": {},
+    "AU": {
+      "AU-WA": 4,
+      "AU-ACT": 6,
+      "AU-SA": 5,
+      "AU-TAS": 2,
+      "AU-VIC": 5,
+      "AU-NSW": 4,
+      "AU-NT": 5,
+      "AU-QLD": 4
+    },
+    "AX": {},
+    "BA": {
+      "BA-SRP": 7,
+      "BA-BIH": 4
+    },
+    "BB": {},
+    "BE": {},
+    "BG": {},
+    "BJ": {},
+    "BO": {},
+    "BR": {
+      "BR-SP": 1
+    },
+    "BS": {},
+    "BW": {},
+    "BY": {},
+    "BZ": {},
+    "CA": {
+      "CA-MB": 2,
+      "CA-PE": 5,
+      "CA-NS": 4,
+      "CA-AB": 5,
+      "CA-BC": 3,
+      "CA-NB": 4,
+      "CA-ON": 3,
+      "CA-SK": 3,
+      "CA-NL": 6,
+      "CA-QC": 2,
+      "CA-NT": 3,
+      "CA-NU": 2,
+      "CA-YT": 3
+    },
+    "CD": {},
+    "CG": {},
+    "CH": {
+      "CH-BE": 6,
+      "CH-FR": 9,
+      "CH-SH": 7,
+      "CH-AG": 9,
+      "CH-TG": 6,
+      "CH-VD": 5,
+      "CH-TI": 11,
+      "CH-UR": 10,
+      "CH-SZ": 11,
+      "CH-NE": 3,
+      "CH-VS": 5,
+      "CH-LU": 8,
+      "CH-NW": 7,
+      "CH-GL": 7,
+      "CH-ZH": 6,
+      "CH-OW": 9,
+      "CH-ZG": 5,
+      "CH-SO": 6,
+      "CH-BS": 6,
+      "CH-BL": 6,
+      "CH-AR": 4,
+      "CH-AI": 8,
+      "CH-SG": 6,
+      "CH-GR": 5,
+      "CH-GE": 5,
+      "CH-JU": 8
+    },
+    "CL": {
+      "CL-AP": 1
+    },
+    "CN": {},
+    "CO": {},
+    "CR": {},
+    "CU": {},
+    "CY": {},
+    "CZ": {},
+    "DE": {
+      "DE-BW": 3,
+      "DE-BY": 3,
+      "DE-ST": 2,
+      "DE-BE": 2,
+      "DE-MV": 2,
+      "DE-BB": 3,
+      "DE-HE": 1,
+      "DE-NW": 2,
+      "DE-RP": 2,
+      "DE-SL": 3,
+      "DE-TH": 2,
+      "DE-SN": 2,
+      "DE-HB": 1,
+      "DE-HH": 1,
+      "DE-NI": 1,
+      "DE-SH": 1
+    },
+    "DK": {},
+    "DO": {},
+    "EC": {},
+    "EE": {},
+    "EG": {},
+    "ES": {
+      "ES-AN": 2,
+      "ES-IB": 3,
+      "ES-AR": 2,
+      "ES-CL": 2,
+      "ES-CM": 3,
+      "ES-CN": 2,
+      "ES-EX": 2,
+      "ES-GA": 3,
+      "ES-RI": 3,
+      "ES-MD": 2,
+      "ES-MC": 2,
+      "ES-NC": 2,
+      "ES-AS": 2,
+      "ES-PV": 3,
+      "ES-CB": 3,
+      "ES-CT": 4,
+      "ES-VC": 3
+    },
+    "FI": {},
+    "FO": {},
+    "FR": {},
+    "GA": {},
+    "GB": {
+      "GB-ENG": 3,
+      "GB-NIR": 5,
+      "GB-SCT": 4,
+      "GB-WLS": 3
+    },
+    "GD": {},
+    "GE": {},
+    "GG": {},
+    "GI": {},
+    "GL": {},
+    "GM": {},
+    "GR": {},
+    "GT": {},
+    "GY": {},
+    "HK": {},
+    "HN": {},
+    "HR": {},
+    "HT": {},
+    "HU": {},
+    "ID": {},
+    "IE": {},
+    "IM": {},
+    "IS": {},
+    "IT": {
+      "IT-32": 1
+    },
+    "JE": {},
+    "JM": {},
+    "JP": {},
+    "KR": {},
+    "KZ": {},
+    "LI": {},
+    "LS": {},
+    "LT": {},
+    "LU": {},
+    "LV": {},
+    "MA": {},
+    "MC": {},
+    "MD": {},
+    "ME": {},
+    "MG": {},
+    "MK": {},
+    "MN": {},
+    "MS": {},
+    "MT": {},
+    "MX": {},
+    "MZ": {},
+    "NA": {},
+    "NE": {},
+    "NG": {},
+    "NI": {},
+    "NL": {},
+    "NO": {},
+    "NZ": {
+      "NZ-WGN": 1,
+      "NZ-MWT": 1,
+      "NZ-AUK": 1,
+      "NZ-NTL": 1,
+      "NZ-WKO": 1,
+      "NZ-GIS": 1,
+      "NZ-BOP": 1,
+      "NZ-NSN": 1,
+      "NZ-TKI": 1,
+      "NZ-OTA": 1,
+      "NZ-STL": 1,
+      "NZ-CAN": 2,
+      "NZ-HKB": 1,
+      "NZ-MBH": 1,
+      "NZ-CIT": 1,
+      "NZ-WTC": 1
+    },
+    "PA": {},
+    "PE": {},
+    "PG": {},
+    "PH": {},
+    "PL": {},
+    "PR": {},
+    "PT": {
+      "PT-20": 1,
+      "PT-30": 2
+    },
+    "PY": {},
+    "RO": {},
+    "RS": {},
+    "RU": {},
+    "SE": {},
+    "SG": {},
+    "SI": {},
+    "SJ": {},
+    "SK": {},
+    "SM": {},
+    "SR": {},
+    "SV": {},
+    "TN": {},
+    "TR": {},
+    "UA": {},
+    "US": {
+      "US-CA": 2,
+      "US-CT": 3,
+      "US-IL": 2,
+      "US-IN": 3,
+      "US-KY": 3,
+      "US-MI": 2,
+      "US-NY": 2,
+      "US-MO": 3,
+      "US-OH": 2,
+      "US-DE": 1,
+      "US-HI": 2,
+      "US-LA": 3,
+      "US-NC": 3,
+      "US-ND": 1,
+      "US-NJ": 2,
+      "US-TN": 2,
+      "US-TX": 2,
+      "US-AL": 2,
+      "US-AZ": 1,
+      "US-CO": 1,
+      "US-GA": 1,
+      "US-ID": 1,
+      "US-IA": 2,
+      "US-KS": 1,
+      "US-ME": 2,
+      "US-MD": 1,
+      "US-MA": 1,
+      "US-MS": 1,
+      "US-MT": 1,
+      "US-NE": 2,
+      "US-NH": 1,
+      "US-NM": 2,
+      "US-OK": 2,
+      "US-PA": 1,
+      "US-RI": 1,
+      "US-SC": 1,
+      "US-UT": 1,
+      "US-VA": 2,
+      "US-WV": 1,
+      "US-AK": 1,
+      "US-MN": 1,
+      "US-OR": 1,
+      "US-SD": 1,
+      "US-VT": 1,
+      "US-WI": 1
+    },
+    "UY": {},
+    "VA": {},
+    "VE": {},
+    "VN": {},
+    "ZA": {},
+    "ZW": {}
   }
 }
