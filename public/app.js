@@ -1,38 +1,22 @@
-(function () {
-  const tip = document.getElementById('tip');
-  const mapHost = document.getElementById('map');
+// Highcharts Maps version (no D3)
+(async function () {
+  const YEAR = 2025;
+
+  // State
+  let TOTALS = {};   // { FR:{ name, national, regional }, ... }
+  let REGIONS = {};  // { FR:{ 'FR-75': n, ... }, ... }
+  const detailsCache = new Map(); // key: "FR-2025" -> holidays[]
+
+  // Elements
   const detailsEl = document.getElementById('details');
   const detailsTitle = document.getElementById('details-title');
   const detailsBody = document.getElementById('details-body');
 
-  const YEAR = 2025;
-  let TOTALS = {};   // { CA: { name, national, regional }, ... }
-  let REGIONS = {};  // { CA: { "CA-ON": 4, "CA-QC": 3, ... }, ... }
-  const detailsCache = new Map(); // "CA-2025" -> holidays[]
-
-  // ---------- Tooltip helpers ----------
-  function setTip(x, y, html) {
-    tip.innerHTML = html;
-    tip.style.display = 'block';
-    tip.style.left = x + 'px';
-    tip.style.top = y + 'px';
-    tip.setAttribute('aria-hidden', 'false');
-  }
-  function hideTip() { tip.style.display = 'none'; tip.setAttribute('aria-hidden', 'true'); }
-
-  // ---------- Geo helpers ----------
-  const getISO2 = (p) => {
-    const raw = p.ISO_A2 || p.iso_a2 || p.iso2 || p.cca2 || null;
-    if (!raw || raw === '-99') return null;
-    return String(raw).toUpperCase();
-  };
-  const getName = (p) => p.NAME || p.ADMIN || p.name_long || p.name || 'Unknown';
-
-  // ---------- Details rendering (with optional region filter) ----------
+  // Render details panel (optional region filter)
   function renderDetails(iso2, displayName, holidays, regionCode = null) {
     detailsEl.style.display = 'block';
-    const regionSuffix = regionCode ? ` — ${regionCode}` : '';
-    detailsTitle.textContent = `${displayName}${regionSuffix} — Holidays (${YEAR})`;
+    const suffix = regionCode ? ` — ${regionCode}` : '';
+    detailsTitle.textContent = `${displayName}${suffix} — Holidays (${YEAR})`;
 
     let list = holidays || [];
     if (regionCode) {
@@ -45,12 +29,8 @@
     }
 
     const rows = list.map(h => {
-      const pretty = new Date(h.date).toLocaleDateString(undefined, {
-        year: 'numeric', month: 'short', day: 'numeric'
-      });
-      const nm = h.localName && h.localName !== h.name
-        ? `${h.name} <span class="note">(${h.localName})</span>`
-        : h.name;
+      const pretty = new Date(h.date).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
+      const nm = h.localName && h.localName !== h.name ? `${h.name} <span class="note">(${h.localName})</span>` : h.name;
       const scope = h.global ? 'national' : 'regional';
       return `<div class="row">
         <div class="cell">${pretty}</div>
@@ -62,21 +42,22 @@
     detailsBody.innerHTML = rows;
   }
 
-  // ---------- Region list UI under the map after click ----------
+  // Render region list below the map
   function renderRegionList(iso2) {
-    const mapBelow = document.getElementById('region-list') || (() => {
-      const el = document.createElement('div');
-      el.id = 'region-list';
-      el.className = 'card';
-      el.style.marginTop = '16px';
-      el.innerHTML = `<div class="hd"><strong>States / Provinces</strong></div><div class="bd"><div id="region-rows" class="rows"></div></div>`;
-      mapHost.parentElement.appendChild(el);
-      return el;
-    })();
+    const anchor = document.getElementById('region-list-anchor');
+    let card = document.getElementById('region-list');
+    if (!card) {
+      card = document.createElement('article');
+      card.id = 'region-list';
+      card.className = 'card';
+      card.style.marginTop = '16px';
+      card.innerHTML = `<div class="hd"><strong>States / Provinces</strong></div><div class="bd"><div id="region-rows" class="rows"></div></div>`;
+      anchor.parentNode.insertBefore(card, anchor.nextSibling);
+    }
 
     const rows = document.getElementById('region-rows');
     const m = REGIONS[iso2] || {};
-    const entries = Object.entries(m).sort((a,b) => b[1] - a[1]); // desc
+    const entries = Object.entries(m).sort((a,b) => b[1] - a[1]);
 
     if (!entries.length) {
       rows.innerHTML = `<div class="note">No regional breakdown available.</div>`;
@@ -103,186 +84,128 @@
     });
   }
 
-  // ---------- Map render (choropleth + zoom on click) ----------
-  async function renderMap() {
-    mapHost.innerHTML = '';
+  // Build color classes (light green -> dark blue)
+  function makeDataClasses(values) {
+    if (!values.length) {
+      return [{ to: 1, color: '#d9d9d9' }];
+    }
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const a = (n) => min + (max - min) * n;
+    return [
+      { to: a(1/6),              color: '#e8f5e9' },
+      { from: a(1/6), to: a(2/6), color: '#ccebd6' },
+      { from: a(2/6), to: a(3/6), color: '#b3dfdf' },
+      { from: a(3/6), to: a(4/6), color: '#95cce6' },
+      { from: a(4/6), to: a(5/6), color: '#6fb4e5' },
+      { from: a(5/6),            color: '#3c7fd6' }
+    ];
+  }
 
-    const width = mapHost.clientWidth || 960;
-    const height = 520;
+  // Fetch details from our serverless (cached)
+  async function getCountryDetails(iso2) {
+    const cacheKey = `${iso2}-${YEAR}`;
+    if (detailsCache.has(cacheKey)) return detailsCache.get(cacheKey);
+    try {
+      const r = await fetch(`/api/holidayDetails?iso2=${iso2}&year=${YEAR}`);
+      if (!r.ok) throw new Error(`details ${r.status}`);
+      const data = await r.json();
+      const list = Array.isArray(data.holidays) ? data.holidays : [];
+      detailsCache.set(cacheKey, list);
+      return list;
+    } catch {
+      detailsCache.set(cacheKey, []);
+      return [];
+    }
+  }
 
-    const svg = d3.select(mapHost)
-      .append('svg')
-      .attr('viewBox', `0 0 ${width} ${height}`)
-      .attr('preserveAspectRatio', 'xMidYMid meet')
-      .style('width', '100%')
-      .style('height', `${height}px`);
+  // Boot
+  try {
+    // 1) Load totals JSON (cache-busted)
+    const totalsRes = await fetch(`/data/totals-2025.json?v=${Date.now()}`, { cache: 'no-store' });
+    const totalsJSON = await totalsRes.json();
+    TOTALS = totalsJSON.totals || {};
+    REGIONS = totalsJSON.regions || {};
 
-    const projection = d3.geoNaturalEarth1();
-    const path = d3.geoPath(projection);
+    // 2) Prepare series data for Highcharts
+    // Build rows like: [code, national, regional, label]
+    const rows = Object.entries(TOTALS).map(([code, rec]) => [
+      code,
+      Number.isFinite(rec?.national) ? rec.national : null,
+      Number.isFinite(rec?.regional) ? rec.regional : null,
+      rec?.name || code
+    ]);
 
-    const WORLD_URL =
-      'https://cdn.jsdelivr.net/npm/three-conic-polygon-geometry@1.4.4/example/geojson/ne_110m_admin_0_countries.geojson';
-    const geo = await fetch(WORLD_URL).then(r => r.json());
+    const nationalValues = rows.map(r => r[1]).filter(v => v !== null);
 
-    projection.fitSize([width, height], geo);
+    // 3) Load Highcharts world topology
+    const topology = await fetch('https://code.highcharts.com/mapdata/custom/world.topo.json').then(r => r.json());
 
-    // ----- Build color scale from national counts -----
-    const hasCount = Object.entries(TOTALS)
-      .map(([_, v]) => v && Number.isFinite(v.national) ? v.national : null)
-      .filter(v => v !== null);
+    // 4) Render map
+    Highcharts.mapChart('wpr-map', {
+      chart: { map: topology, spacing: [8, 8, 8, 8] },
+      title: { text: 'Public Holidays — National Count (2025)' },
+      legend: { layout: 'horizontal', align: 'center', verticalAlign: 'bottom' },
+      credits: { enabled: true }, // leave on per Highcharts map licensing guidelines
+      mapNavigation: {
+        enabled: true,
+        enableMouseWheelZoom: false,
+        buttonOptions: { verticalAlign: 'top' }
+      },
+      colorAxis: {
+        dataClasses: makeDataClasses(nationalValues),
+        nullColor: '#d9d9d9'
+      },
+      tooltip: {
+        useHTML: true,
+        headerFormat: '',
+        formatter: function () {
+          // this.point.options => [code, national, regional, name] via keys below
+          const code = this.point.options.code;
+          const name = this.point.name || this.point.options.label || code;
+          const nat  = this.point.options.value ?? '—';
+          const reg  = this.point.options.regional ?? (TOTALS[code]?.regional ?? '—');
+          return `<strong>${Highcharts.escapeHTML(name)}</strong><br/>
+                  <span class="pill">${nat} national</span>
+                  <span class="pill" style="margin-left:6px">${reg} regional</span>`;
+        }
+      },
+      series: [{
+        name: '# of National Holidays (2025)',
+        // rows: [code, national, regional, label]
+        data: rows,
+        keys: ['code', 'value', 'regional', 'label'],
+        joinBy: ['iso-a2', 'code'],
+        borderColor: '#cfd7e6',
+        nullColor: '#d9d9d9',
+        states: { hover: { color: '#ffe082' } },
+        dataLabels: { enabled: false },
+        point: {
+          events: {
+            click: async function () {
+              const code = this.options.code;
+              const display = TOTALS[code]?.name || this.name || code;
 
-    const min = hasCount.length ? d3.min(hasCount) : 0;
-    const max = hasCount.length ? d3.max(hasCount) : 1;
-    const domain = (min === max) ? [min, min + 1] : [min, max];
+              // Zoom to the clicked country
+              if (typeof this.zoomTo === 'function') this.zoomTo();
 
-    // 7-step green->blue palette (light to dark)
-    const palette = d3.range(0, 1.00001, 1 / 6).map(t => d3.interpolateGnBu(t));
-    const color = d3.scaleQuantize().domain(domain).range(palette);
-    const noDataFill = '#d9d9d9'; // gray for missing data
+              // Fetch & render details
+              const holidays = await getCountryDetails(code);
+              renderDetails(code, display, holidays, null);
 
-    // ----- Draw countries -----
-    const g = svg.append('g');
+              // Render region list (from prebuilt REGIONS)
+              renderRegionList(code);
 
-    const countries = g.selectAll('path.country')
-      .data(geo.features)
-      .enter()
-      .append('path')
-      .attr('class', 'country')
-      .attr('d', path)
-      .attr('fill', d => {
-        const iso = getISO2(d.properties || {});
-        const rec = iso && TOTALS[iso];
-        const n = rec && Number.isFinite(rec.national) ? rec.national : null;
-        return n === null ? noDataFill : color(n);
-      })
-      .attr('stroke', '#cfd7e6')
-      .attr('stroke-width', 0.6)
-      .attr('vector-effect', 'non-scaling-stroke')
-      .style('cursor', 'pointer');
-
-    // Hover: keep fill, just thicken stroke + tooltip (national + regional)
-    countries
-      .on('mousemove', function (event, d) {
-        d3.select(this).attr('stroke-width', 1.0);
-        const p = d.properties || {};
-        const iso2 = getISO2(p);
-        const fallbackName = getName(p);
-        const rec = iso2 ? TOTALS[iso2] : null;
-        const label = (rec && rec.name) || fallbackName;
-        const national = (rec && Number.isFinite(rec.national)) ? rec.national : '—';
-        const regional = (rec && Number.isFinite(rec.regional)) ? rec.regional : '—';
-        setTip(
-          event.clientX,
-          event.clientY,
-          `<strong>${label}</strong>
-           <div class="stack">
-             <span class="pill">${national} national</span>
-             <span class="pill">${regional} regional</span>
-           </div>`
-        );
-      })
-      .on('mouseout', function () {
-        d3.select(this).attr('stroke-width', 0.6);
-        hideTip();
-      })
-      .on('click', async function (event, d) {
-        // Zoom to country bounds
-        const b = path.bounds(d); // [[x0,y0],[x1,y1]]
-        const dx = b[1][0] - b[0][0];
-        const dy = b[1][1] - b[0][1];
-        const cx = (b[0][0] + b[1][0]) / 2;
-        const cy = (b[0][1] + b[1][1]) / 2;
-        const scale = 0.9 / Math.max(dx / width, dy / height);
-        g.transition().duration(550)
-          .attr('transform', `translate(${width/2},${height/2}) scale(${scale}) translate(${-cx},${-cy})`);
-
-        const p = d.properties || {};
-        const iso2 = getISO2(p);
-        const name = (iso2 && TOTALS[iso2]?.name) || getName(p);
-        if (!iso2) return;
-
-        // Fetch Nager.Date details if not cached
-        const cacheKey = `${iso2}-${YEAR}`;
-        if (!detailsCache.has(cacheKey)) {
-          try {
-            const r = await fetch(`/api/holidayDetails?iso2=${iso2}&year=${YEAR}`);
-            if (!r.ok) throw new Error(`details ${r.status}`);
-            const data = await r.json();
-            detailsCache.set(cacheKey, data.holidays || []);
-          } catch {
-            detailsCache.set(cacheKey, []);
+              // Focus details
+              detailsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
           }
         }
-        renderDetails(iso2, name, detailsCache.get(cacheKey), null);
-        renderRegionList(iso2);
-        detailsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-
-    // Reset zoom on background dblclick
-    svg.on('dblclick', () => {
-      g.transition().duration(400).attr('transform', null);
+      }]
     });
-
-    // ----- Legend (discrete swatches) -----
-    const legend = svg.append('g')
-      .attr('transform', `translate(${width/2 - 140}, ${height - 28})`);
-
-    const sw = 32, sh = 10, gap = 4;
-    const thresholds = color.thresholds ? color.thresholds() : [];
-    const labels = [domain[0], ...thresholds, domain[1]];
-
-    legend.selectAll('rect.swatch')
-      .data(palette)
-      .enter()
-      .append('rect')
-      .attr('class', 'swatch')
-      .attr('x', (_, i) => i * (sw + gap))
-      .attr('y', 0)
-      .attr('width', sw)
-      .attr('height', sh)
-      .attr('fill', d => d)
-      .attr('stroke', '#cfd7e6');
-
-    // min + max labels
-    legend.append('text')
-      .attr('x', 0).attr('y', sh + 12)
-      .attr('class', 'note')
-      .style('font-size', '12px')
-      .text(Math.round(domain[0]));
-
-    legend.append('text')
-      .attr('x', (palette.length - 1) * (sw + gap))
-      .attr('y', sh + 12)
-      .attr('class', 'note')
-      .style('text-anchor', 'end')
-      .style('font-size', '12px')
-      .text(Math.round(domain[1]));
-
-    legend.append('text')
-      .attr('x', (palette.length * (sw + gap)) / 2)
-      .attr('y', sh + 26)
-      .attr('class', 'note')
-      .style('text-anchor', 'middle')
-      .style('font-size', '12px')
-      .text('# of National Holidays');
-
-    // Redraw on resize
-    let t; window.addEventListener('resize', () => {
-      clearTimeout(t); t = setTimeout(renderMap, 150);
-    }, { passive: true });
-  }
-
-  async function boot() {
-    // One local file
-    const r = await fetch(`/data/totals-2025.json?v=${Date.now()}`, { cache: 'no-store' });
-    const data = await r.json();
-    TOTALS  = data.totals  || {};
-    REGIONS = data.regions || {};
-    await renderMap();
-  }
-
-  boot().catch(err => {
+  } catch (err) {
     console.error('Init failed:', err);
-    mapHost.innerHTML = '<div class="note">Failed to load map.</div>';
-  });
+    const el = document.getElementById('wpr-map');
+    if (el) el.innerHTML = '<div class="note">Failed to load map.</div>';
+  }
 })();

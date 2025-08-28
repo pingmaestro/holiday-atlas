@@ -5,8 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Holiday Atlas — Mapping Holidays Across The World</title>
 
+    <!-- Styles -->
     <link rel="stylesheet" href="/styles.css" />
-    <script src="https://unpkg.com/d3@7/dist/d3.min.js" defer></script>
+
+    <!-- Highcharts Maps -->
+    <script src="https://code.highcharts.com/maps/highmaps.js" defer></script>
+    <script src="https://code.highcharts.com/modules/exporting.js" defer></script>
+
+    <!-- App -->
     <script src="/app.js" defer></script>
   </head>
   <body>
@@ -15,7 +21,7 @@
         <div class="brand">Holiday Atlas</div>
         <nav class="nav">
           <a href="#map">Map</a>
-          <a href="#ranking">Ranking</a>
+          <a href="#details">Details</a>
           <a href="#methodology">Methodology</a>
         </nav>
       </div>
@@ -25,13 +31,9 @@
       <div class="container">
         <h1>Countries with Holidays — Interactive Map</h1>
         <p>
-          Hover the map to see the country and monthly holiday count. Counts come from Calendarific via a serverless proxy (no API keys in the client).
+          Hover to see national &amp; regional holiday counts. Click a country to zoom and view its 2025 holidays. Data from Nager.Date; national counts aligned with the Nager “Countries” table.
         </p>
-        <ul class="toc" aria-label="On this page">
-          <li><a href="#map-card">Map</a></li>
-          <li><a href="#ranking">Ranking table</a></li>
-          <li><a href="#methodology">Methodology</a></li>
-        </ul>
+        <p class="note">Year: 2025 • Source: Nager.Date</p>
       </div>
     </section>
 
@@ -41,48 +43,29 @@
         <!-- Map Card -->
         <article id="map-card" class="card">
           <div class="hd">
-            <strong>Map — Holidays by Country</strong>
-            <div class="controls">
-               <span class="note">Year: 2025 • Source: Nager.Date</span>
-            </div>
+            <strong>Map — National Holidays (2025)</strong>
           </div>
           <div class="bd">
-            <!-- Static SVG map goes here -->
-            <div
-              id="map"
-              role="img"
-              aria-label="World map showing countries colored by holiday count"
-              style="height: 520px;"
-            ></div>
-            <div id="tip" class="tooltip" style="display:none" aria-hidden="true"></div>
+            <div id="wpr-map" role="img" aria-label="Choropleth map of national holidays"></div>
           </div>
         </article>
 
+        <!-- Country details (appears on click) -->
         <article id="details" class="card" style="margin-top:16px; display:none">
           <div class="hd"><strong id="details-title">Holidays (2025)</strong></div>
           <div class="bd"><div id="details-body" class="rows"></div></div>
         </article>
 
-        <!-- Ranking Card (placeholder for later) -->
-        <article id="ranking" class="card" style="margin-top:16px">
-          <div class="hd">
-            <strong>Countries with the Most Holidays (selected month)</strong>
-          </div>
-          <div class="bd">
-            <div id="rows" class="rows note">
-              Coming soon — this section will list countries by count for the selected month. For now, use the map tooltips.
-            </div>
-          </div>
-        </article>
+        <!-- Region list (states/provinces) gets inserted after click -->
+        <div id="region-list-anchor"></div>
 
         <!-- Methodology Card -->
         <article id="methodology" class="card" style="margin-top:16px">
-          <div class="hd">
-            <strong>Methodology</strong>
-          </div>
+          <div class="hd"><strong>Methodology</strong></div>
           <div class="bd">
             <p>
-              This visualization uses <em>national</em> holidays from the Calendarific API. The client calls a same-origin serverless proxy that holds the API key in an environment variable; responses are cached to minimize calls.
+              National counts come from the Nager.Date “Countries” table. Regional counts and per-province breakdown are computed from the 2025 PublicHolidays feed (unique dates per region).
+              The page makes one local request to a prebuilt JSON file; clicking a country fetches cached details via a serverless proxy.
             </p>
           </div>
         </article>
@@ -93,16 +76,14 @@
         <div class="card">
           <div class="hd"><strong>About</strong></div>
           <div class="bd">
-            <p>
-              <strong>Holiday Atlas</strong> is a portfolio demo: clean UI, secure key handling, and efficient caching.
-            </p>
+            <p><strong>Holiday Atlas</strong> is a portfolio demo mixing secure data handling and fast client UX.</p>
           </div>
         </div>
         <div class="card">
           <div class="hd"><strong>Data freshness</strong></div>
           <div class="bd">
             <p class="note">
-              Counts cache for 7 days at the proxy. The client also memoizes hover results during a session.
+              Static totals are rebuilt offline. The details API caches responses for 7 days.
             </p>
           </div>
         </div>
