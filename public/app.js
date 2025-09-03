@@ -140,7 +140,6 @@
     const nationalValues = rows.map(r => r[1]).filter(v => v !== null);
 
     // 3) Load a high-res Robinson world map (crisper)
-
     const topology = await fetch('https://code.highcharts.com/mapdata/custom/world-robinson-highres.geo.json')
       .then(r => r.json());
 
@@ -162,23 +161,24 @@
           contextButton: { align: 'right', verticalAlign: 'top', x: -8, y: 8, theme: { r: 0 } }
         }
       },
+
+      // 🔒 Disable all zoom interactions/buttons
       mapNavigation: {
-        enabled: true,
+        enabled: false,
+        enableButtons: false,
         enableMouseWheelZoom: false,
-        buttonOptions: {
-          align: 'right',
-          verticalAlign: 'top',
-          x: -8,
-          theme: { r: 0, 'stroke-width': 1, stroke: '#cfd7e6', fill: '#ffffff' }
-        },
-        buttons: { zoomIn: { y: 48 }, zoomOut: { y: 84 } }
+        enableDoubleClickZoomTo: false,
+        enableDoubleClickZoom: false,
+        enableTouchZoom: false
       },
+
       legend: {
         layout: 'horizontal',
         align: 'center',
         verticalAlign: 'bottom',
         itemStyle: { fontSize: '12px' }
       },
+
       colorAxis: {
         dataClassColor: 'category',
         dataClasses: [
@@ -192,6 +192,7 @@
         nullColor: '#d9d9d9',
         labels: { formatter: function() { return this.value ? Math.round(this.value) : this.value; } }
       },
+
       tooltip: {
         useHTML: true,
         headerFormat: '',
@@ -207,11 +208,12 @@
             : `<strong>${esc(name)}</strong><br/><span class="pill">${val} national holidays</span>`;
         }
       },
+
       plotOptions: {
         series: {
           states: {
             hover: { animation: { duration: 0 }, halo: false },
-            inactive: { opacity: 1 }
+            inactive: { opacity: 1 } // keep other borders visible
           },
           animation: false,
           nullInteraction: true,
@@ -219,6 +221,7 @@
           cursor: 'pointer'
         }
       },
+
       series: [{
         type: 'map',
         mapData: topology,
@@ -226,15 +229,22 @@
         keys: ['hc-key','value','label'],
         joinBy: ['hc-key','hc-key'],                 // join by hc-key so all shapes are present
         allAreas: true,                              // draw countries even without data
+
+        // Borders and selection style
         borderColor: '#cfd7e6',
         borderWidth: 0.20,
-        states: { hover: { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.2, borderColor: '#000', brightness: 0.15 } },
+        allowPointSelect: true,                      // ← enable click-to-select
+        states: {
+          hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.2, borderColor: '#000', brightness: 0.15 },
+          select: { color: null, borderColor: '#000', borderWidth: 1.4, brightness: 0.18 } // ← persistent selected look
+        },
+
         dataLabels: { enabled: false },
         inactiveOtherPoints: false,                  // never dim the rest on hover
+
         point: {
           events: {
             mouseOver: function () {
-              // Force snappy tooltip, including for null points
               const c = this.series.chart;
               c.tooltip.refresh(this);
               this.setState('hover');
@@ -245,11 +255,14 @@
               this.setState();
             },
             click: async function () {
+              // ❌ no zoomTo — we only highlight + render table
               const hcKey = (this.options['hc-key'] || this['hc-key'] || '').toUpperCase();
               const iso2  = hcKey; // hc-key is ISO2 lowercased in map, so uppercase it for API
               const display = (TOTALS[iso2]?.name) || this.name || iso2;
 
-              if (typeof this.zoomTo === 'function') this.zoomTo();
+              // Toggle selection so exactly one stays selected
+              this.series.points.forEach(p => { if (p !== this && p.selected) p.select(false, false); });
+              this.select(true, false);
 
               try {
                 const r = await fetch(`/api/holidayDetails?iso2=${iso2}&year=${YEAR}`);
