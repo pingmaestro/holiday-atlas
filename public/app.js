@@ -219,8 +219,8 @@
         joinBy: ['hc-key','hc-key'],                 // join by hc-key so all shapes are present
         allAreas: true,                              // draw countries even without data
         borderColor: '#cfd7e6',
-        borderWidth: 0.6,
-        states: { hover: { color: '#ffe082', animation: { duration: 0 }, halo: false } },
+        borderWidth: 0.10,
+        states: { hover: { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.2 } },
         dataLabels: { enabled: false },
         inactiveOtherPoints: false,                  // never dim the rest on hover
         point: {
