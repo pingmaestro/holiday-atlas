@@ -140,7 +140,8 @@
     const nationalValues = rows.map(r => r[1]).filter(v => v !== null);
 
     // 3) Load a high-res Robinson world map (crisper)
-    const topology = await fetch('https://code.highcharts.com/mapdata/custom/world-robinson-highres.topo.json')
+
+    const topology = await fetch('https://code.highcharts.com/mapdata/custom/world-robinson-highres.geo.json')
       .then(r => r.json());
 
     // 4) Render map
