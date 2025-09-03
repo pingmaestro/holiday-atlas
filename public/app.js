@@ -12,6 +12,7 @@
   let TOTALS = {};   // { FR:{ name, national, regional }, ... }
   let REGIONS = {};  // { FR:{ 'FR-75': n, ... }, ... }
   const detailsCache = new Map(); // "FR-2025" -> holidays[]
+  let CURRENT_VIEW = 'all';
 
   // Elements
   const detailsEl = document.getElementById('details');
@@ -144,7 +145,7 @@
       .then(r => r.json());
 
     // 4) Render map
-    Highcharts.mapChart('wpr-map', {
+    const chart = Highcharts.mapChart('wpr-map', {
       chart: {
         map: topology,
         spacing: [0, 0, 0, 0],
@@ -203,6 +204,13 @@
         formatter: function () {
           const name = this.point.name || this.point.options?.label || (this.point.options && this.point.options['hc-key'] ? this.point.options['hc-key'].toUpperCase() : '');
           const val = (typeof this.point.value === 'number') ? this.point.value : null;
+
+          if (CURRENT_VIEW === 'today') {
+            return val === 1
+              ? `<strong>${esc(name)}</strong><br/><span class="pill">National holiday today</span>`
+              : `<strong>${esc(name)}</strong><br/><span class="pill">No holiday today</span>`;
+          }
+
           return val == null
             ? `<strong>${esc(name)}</strong><br/><span class="pill">No data</span>`
             : `<strong>${esc(name)}</strong><br/><span class="pill">${val} national holidays</span>`;
@@ -265,10 +273,7 @@
               this.select(true, false);
 
               try {
-                const r = await fetch(`/api/holidayDetails?iso2=${iso2}&year=${YEAR}`);
-                const data = r.ok ? await r.json() : { holidays: [] };
-                const holidays = Array.isArray(data.holidays) ? data.holidays : [];
-                detailsCache.set(`${iso2}-${YEAR}`, holidays);
+                const holidays = await getCountryDetails(iso2);
                 renderDetails(iso2, display, holidays, null);
                 renderRegionList(iso2);
                 detailsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -296,11 +301,78 @@
           b.setAttribute('aria-selected', active ? 'true' : 'false');
         });
 
-        // Emit a custom event your app can listen to
+        // Switch view
         const view = btn.dataset.view; // 'all' or 'today'
-        document.dispatchEvent(new CustomEvent('viewchange', { detail: { view } }));
+        setView(view);
       });
     }
+
+    // ----- View switching logic -----
+    // Save original data and color classes to restore when leaving "Today"
+    const ALL_DATA = rows.slice(); // [hc-key, value, label]
+    const ALL_COLOR_CLASSES = [
+      { to: 4,              color: '#d9f2e3', name: '≤ 4' },
+      { from: 5,  to: 7,    color: '#a9d9d8', name: '5-7' },
+      { from: 8,  to: 10,   color: '#8cc7e4', name: '8-10' },
+      { from: 11, to: 13,   color: '#6db3ea', name: '11-13' },
+      { from: 14, to: 19,   color: '#4d9ae8', name: '14-19' },
+      { from: 20,           color: '#0b3d91', name: '20+' }
+    ];
+
+    async function setView(view) {
+      if (view === CURRENT_VIEW) return;
+      CURRENT_VIEW = view;
+
+      if (view === 'all') {
+        // Restore original data & legend
+        chart.update({
+          colorAxis: { dataClasses: ALL_COLOR_CLASSES, dataClassColor: 'category', nullColor: '#d9d9d9' }
+        }, false);
+        chart.series[0].setData(ALL_DATA, false);
+        chart.redraw();
+        return;
+      }
+
+      // ---- TODAY VIEW ----
+      // Simple approach: use the user's local date (upgrade later to per-country tz if needed)
+      const todayLocal = new Date();
+      const yyyy = todayLocal.getFullYear();
+      const mm = String(todayLocal.getMonth() + 1).padStart(2, '0');
+      const dd = String(todayLocal.getDate()).padStart(2, '0');
+      const todayStr = `${yyyy}-${mm}-${dd}`;
+
+      // Build a set of ISO2 codes that have a NATIONAL holiday today
+      const iso2List = Object.keys(TOTALS);
+      const holidaySets = await Promise.all(iso2List.map(async iso2 => {
+        const list = await getCountryDetails(iso2);
+        const hit = list.some(h => h.global === true && h.date === todayStr);
+        return hit ? iso2 : null;
+      }));
+      const todaySet = new Set(holidaySets.filter(Boolean));
+
+      // Build data as binary: 1 = holiday today, null = none (for gray)
+      const todayData = iso2List.map(iso2 => [
+        iso2.toLowerCase(),            // hc-key
+        todaySet.has(iso2) ? 1 : null, // value
+        TOTALS[iso2]?.name || iso2     // label
+      ]);
+
+      // Update legend to binary classes
+      chart.update({
+        colorAxis: {
+          dataClassColor: 'category',
+          dataClasses: [
+            { to: 0, color: '#d9d9d9', name: 'No holiday today' },
+            { from: 1, color: '#0b3d91', name: 'Holiday today' }
+          ],
+          nullColor: '#d9d9d9'
+        }
+      }, false);
+
+      chart.series[0].setData(todayData, false);
+      chart.redraw();
+    }
+
   } catch (err) {
     console.error('Init failed:', err);
     const el = document.getElementById('wpr-map');
