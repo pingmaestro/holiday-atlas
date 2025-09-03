@@ -281,6 +281,26 @@
         }
       }]
     });
+
+    // ---- View tag toggle (All Year / Today) ----
+    const tagsEl = document.querySelector('.view-tags');
+    if (tagsEl) {
+      tagsEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('.view-tag');
+        if (!btn) return;
+
+        // Visual active state
+        tagsEl.querySelectorAll('.view-tag').forEach(b => {
+          const active = b === btn;
+          b.classList.toggle('is-active', active);
+          b.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+
+        // Emit a custom event your app can listen to
+        const view = btn.dataset.view; // 'all' or 'today'
+        document.dispatchEvent(new CustomEvent('viewchange', { detail: { view } }));
+      });
+    }
   } catch (err) {
     console.error('Init failed:', err);
     const el = document.getElementById('wpr-map');

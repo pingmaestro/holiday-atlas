@@ -25,6 +25,35 @@ header {
   font-size: 16px;
 }
 
+/* ---- Tags ---- */
+
+.view-tags {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0 12px;
+}
+
+.view-tag {
+  appearance: none;
+  border: 1px solid var(--chip);
+  background: #fff;
+  color: #111827;
+  padding: 6px 10px;
+  font-size: 13px;
+  line-height: 1;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.view-tag:hover { border-color: #b9c4d8; }
+.view-tag.is-active {
+  background: #0b3d91;   /* deep blue to match your 20+ bin */
+  color: #fff;
+  border-color: #0b3d91;
+}
+
+
 /* ---- Contained Map Area ---- */
 .map-wrap {
   max-width: 1500px;     /* ← contain the map & legend width */
