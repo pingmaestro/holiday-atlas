@@ -25,18 +25,31 @@ header {
   font-size: 16px;
 }
 
-/* ---- Map (full-bleed under header) ---- */
-#wpr-map {
-  width: 100vw;
-  height: calc(100vh - var(--header-h));
+/* ---- Contained Map Area ---- */
+.map-wrap {
+  max-width: 960px;     /* ← contain the map & legend width */
+  margin: 16px auto;
+  padding: 8px 12px;
 }
+
+/* Map itself (no more full-bleed) */
+#wpr-map {
+  width: 100%;
+  height: 520px;        /* ← adjust to taste (420–560) */
+  /* Alternative if you prefer responsive height: */
+  /* aspect-ratio: 16 / 9; min-height: 420px; height: auto; */
+}
+
+/* Optional: smaller legend text to fit the narrower container */
+.highcharts-legend-item text { font-size: 11px; }
+.highcharts-legend { margin-top: 4px; }
 
 /* Square Highcharts buttons (no radius) */
 .highcharts-button-box { rx: 0 !important; ry: 0 !important; }
 
 /* ---- Cards / Details ---- */
 .card {
-  max-width: 1100px;
+  max-width: 960px;     /* align card width with map container */
   margin: 16px auto;
   padding: 16px;
   border: 1px solid var(--border);
@@ -71,7 +84,7 @@ header {
   shape-rendering: geometricPrecision;
 }
 
-/* Never fade countries (some themes dim others on hover) */
+/* Keep other countries from fading on hover/legend interactions */
 .highcharts-point-inactive,
 .highcharts-inactive,
 .highcharts-null-point,
@@ -81,6 +94,8 @@ header {
 
 /* ---- Responsive ---- */
 @media (max-width: 720px) {
+  .map-wrap { padding: 8px; }
+  #wpr-map { height: 440px; }  /* a bit shorter on small screens */
   .rows .row { grid-template-columns: 120px 1fr; }
   .rows .row .cell:last-child { grid-column: 1 / -1; }
 }

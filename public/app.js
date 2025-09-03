@@ -187,7 +187,7 @@
           { from: 8,  to: 10,   color: '#8cc7e4', name: '8-10' },
           { from: 11, to: 13,   color: '#6db3ea', name: '11-13' },
           { from: 14, to: 19,   color: '#4d9ae8', name: '14-19' },
-          { from: 20,           color: '#0b3d91', name: '20+' } 
+          { from: 20,           color: '#0b3d91', name: '20+' }
         ],
         nullColor: '#d9d9d9',
         labels: { formatter: function() { return this.value ? Math.round(this.value) : this.value; } }

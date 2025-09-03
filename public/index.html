@@ -10,23 +10,20 @@
     <script src="https://code.highcharts.com/modules/exporting.js" defer></script>
     <script src="https://code.highcharts.com/modules/accessibility.js" defer></script>
     <script src="/app.js?v=12" defer></script>
-
   </head>
   <body>
     <header>
       <div class="brand">Holiday Atlas — Interactive Map of National Holidays</div>
     </header>
 
-    <!-- Full-bleed map -->
-    <div id="wpr-map" role="img" aria-label="Choropleth map of national holidays"></div>
+    <div class="map-wrap">
+      <div id="wpr-map" role="img" aria-label="Choropleth map of national holidays"></div>
+      <article id="details" class="card" style="display:none">
+        <div><strong id="details-title">Holidays (2025)</strong></div>
+        <div id="details-body" class="rows"></div>
+      </article>
+    </div>
 
-    <!-- Country details (appears on click) -->
-    <article id="details" class="card" style="display:none">
-      <div><strong id="details-title">Holidays (2025)</strong></div>
-      <div id="details-body" class="rows"></div>
-    </article>
-
-    <!-- Region list will be injected after first click -->
     <div id="region-list-anchor"></div>
   </body>
 </html>
