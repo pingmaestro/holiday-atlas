@@ -1,59 +1,50 @@
-// Holiday Atlas app.js — dynamic year, All Year + Today views, List/Calendar detail modes (national-only + date UX fixes)
+// Holiday Atlas app.js — YEAR views + List/Calendar (national-only, calendar styling, custom tooltip)
 
 (async function () {
-  // ---- Dynamic YEAR with optional ?year= override ----
   const yParam = Number(new URLSearchParams(location.search).get('year'));
   const YEAR = Number.isInteger(yParam) && yParam >= 1900 && yParam <= 2100
     ? yParam
     : new Date().getFullYear();
 
-  // ---- Tiny HTML escaper ----
   const esc = s => String(s).replace(/[&<>"']/g, m => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[m]));
 
-  // ---- Parse ISO (YYYY-MM-DD) as a local Date (avoid UTC off-by-one) ----
   function parseLocalISODate(iso) {
     const [y, m, d] = String(iso).split('-').map(Number);
     return Number.isInteger(y) && Number.isInteger(m) && Number.isInteger(d)
-      ? new Date(y, m - 1, d) // local midnight
+      ? new Date(y, m - 1, d)
       : new Date(iso);
   }
 
-  // ---- State ----
-  let TOTALS = {};   // { FR:{ name, national, regional }, ... }
-  let REGIONS = {};  // { FR:{ 'FR-75': n, ... }, ... }
-  const detailsCache = new Map(); // "FR-2025" -> holidays[]
-  let CURRENT_VIEW = 'all';       // 'all' (year totals) or 'today'
-  let CURRENT_MODE = 'list';      // 'list' or 'cal' for the details pane
-  let CURRENT_DETAILS = null;     // { iso2, displayName, holidays, regionCode }
+  let TOTALS = {};
+  let REGIONS = {};
+  const detailsCache = new Map();
+  let CURRENT_VIEW = 'all';
+  let CURRENT_MODE = 'list';
+  let CURRENT_DETAILS = null;
 
-  // ---- Elements ----
   const detailsTitle = document.getElementById('details-title');
   const detailsBody  = document.getElementById('details-body');
   const loadingEl    = document.getElementById('view-loading');
 
-  // ---- Loader + cache helpers (Today view) ----
   let TODAY_CACHE = { at: 0, list: [] };
-  const TODAY_TTL_MS = 10 * 60 * 1000; // 10 minutes
+  const TODAY_TTL_MS = 10 * 60 * 1000;
 
   function setLoading(isLoading, label = 'Loading Today…') {
     if (!loadingEl) return;
+    loadingEl.hidden = !isLoading;
     if (isLoading) {
       loadingEl.textContent = label;
-      loadingEl.hidden = false;
       document.body.setAttribute('aria-busy', 'true');
     } else {
-      loadingEl.hidden = true;
       document.body.removeAttribute('aria-busy');
     }
   }
 
   async function fetchTodaySet(year) {
     const now = Date.now();
-    if (now - TODAY_CACHE.at < TODAY_TTL_MS && TODAY_CACHE.list.length) {
-      return TODAY_CACHE.list;
-    }
+    if (now - TODAY_CACHE.at < TODAY_TTL_MS && TODAY_CACHE.list.length) return TODAY_CACHE.list;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
     try {
@@ -84,26 +75,22 @@
     }
   }
 
-  // ---- Calendar renderer (12-month year grid) ----
-  function renderCalendarHTML(year, holidays /* already filtered to national */) {
-    // 2) Make date obvious: bold + light green bg
-    // 3) Hover shows full date + full holiday name
-    // 4) Past dates light grey
-    const map = new Map(); // yyyy-mm-dd -> [names]
+  // ---- Calendar renderer ----
+  function renderCalendarHTML(year, holidays) {
+    const map = new Map();
     holidays.forEach(h => {
       const d = h.date;
       if (!map.has(d)) map.set(d, []);
       map.get(d).push(h.name || h.localName || 'Holiday');
     });
 
-    // normalize "today" to local midnight
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     const monthNames = Array.from({ length: 12 }, (_, i) =>
       new Date(year, i, 1).toLocaleString(undefined, { month: 'long' })
     );
-    const dow = ['S','M','T','W','T','F','S']; // Sunday-start
+    const dow = ['S','M','T','W','T','F','S'];
 
     const months = monthNames.map((mn, mIdx) => {
       const first = new Date(year, mIdx, 1);
@@ -119,13 +106,15 @@
         const mm = String(mIdx + 1).padStart(2, '0');
         const dd = String(day).padStart(2, '0');
         const key = `${yyyy}-${mm}-${dd}`;
+
         const isHoliday = map.has(key);
         const isPast = dLocal < today;
+
         const names = isHoliday ? map.get(key) : [];
         const longDate = dLocal.toLocaleDateString(undefined, { weekday:'short', year:'numeric', month:'long', day:'numeric' });
-        const title = isHoliday ? `${longDate} — ${names.join(', ')}` : longDate;
+        const tip = isHoliday ? `${longDate} — ${names.join(', ')}` : longDate;
 
-        return `<div class="cal-day${isHoliday ? ' holiday' : ''}${isPast ? ' past' : ''}" title="${esc(title)}">${day}</div>`;
+        return `<div class="cal-day${isHoliday ? ' holiday' : ''}${isPast ? ' past' : ''}" data-tip="${esc(tip)}" aria-label="${esc(tip)}" tabindex="0">${day}</div>`;
       });
 
       return `
@@ -142,20 +131,48 @@
     return `<div class="year-cal">${months}</div>`;
   }
 
-  // ---- Details renderer (List/Calendar) ----
+  // ---- Custom tooltip ----
+  let calTipEl = null;
+  function ensureCalTip() {
+    if (calTipEl) return calTipEl;
+    calTipEl = document.createElement('div');
+    calTipEl.className = 'cal-tip';
+    calTipEl.hidden = true;
+    document.body.appendChild(calTipEl);
+    return calTipEl;
+  }
+  function showCalTipFor(el) {
+    const text = el.getAttribute('data-tip');
+    if (!text) return;
+    const tip = ensureCalTip();
+    tip.textContent = text;
+    const r = el.getBoundingClientRect();
+    tip.style.left = Math.round(window.scrollX + r.left + r.width / 2) + 'px';
+    tip.style.top  = Math.round(window.scrollY + r.top - 8) + 'px';
+    tip.hidden = false;
+  }
+  function hideCalTip() { if (calTipEl) calTipEl.hidden = true; }
+
+  detailsBody.addEventListener('mouseover', e => {
+    const day = e.target.closest('.cal-day');
+    if (day) showCalTipFor(day);
+  });
+  detailsBody.addEventListener('mouseout', hideCalTip);
+  detailsBody.addEventListener('focusin', e => {
+    const day = e.target.closest('.cal-day');
+    if (day) showCalTipFor(day);
+  });
+  detailsBody.addEventListener('focusout', hideCalTip);
+  window.addEventListener('scroll', hideCalTip, { passive: true });
+
+  // ---- Details renderer ----
   function renderDetails(iso2, displayName, holidays, regionCode = null, mode = CURRENT_MODE) {
     CURRENT_DETAILS = { iso2, displayName, holidays, regionCode };
 
-    // 1) Only national holidays in the first block; remove tags/third column
-    let list = Array.isArray(holidays) ? holidays : [];
-    // If you ever want region-aware behavior, tweak here.
-    const natList = list.filter(h => h && h.global === true);
+    const natList = (Array.isArray(holidays) ? holidays : []).filter(h => h && h.global === true);
 
-    // 5) Title: There are [N] National Holidays in [Country] for [Year]
-    const count = natList.length;
-    detailsTitle.textContent = `There ${count === 1 ? 'is' : 'are'} ${count} National Holiday${count === 1 ? '' : 's'} in ${displayName} for ${YEAR}`;
+    detailsTitle.textContent = `${displayName} — Holidays (${YEAR})`;
 
-    // Toggle the tab UI
     const btnList = document.getElementById('details-view-list');
     const btnCal  = document.getElementById('details-view-cal');
     if (btnList && btnCal) {
@@ -167,15 +184,16 @@
 
     if (!natList.length) {
       detailsBody.innerHTML = `<div class="note">No national holidays available.</div>`;
+      hideCalTip();
       return;
     }
 
     if (mode === 'cal') {
       detailsBody.innerHTML = renderCalendarHTML(YEAR, natList);
+      hideCalTip();
       return;
     }
 
-    // LIST mode (two columns: date, name — no "national/regional" pill)
     const rows = natList
       .slice()
       .sort((a, b) => parseLocalISODate(a.date) - parseLocalISODate(b.date))
@@ -192,6 +210,7 @@
       }).join('');
 
     detailsBody.innerHTML = `<div class="rows">${rows}</div>`;
+    hideCalTip();
   }
 
   // ---- Region list card & click wiring (unchanged) ----

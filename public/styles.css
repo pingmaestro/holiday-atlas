@@ -207,6 +207,34 @@ header {
   border-color: #cfe6d4;
 }
 
+/* Generic hidden helper */
+[hidden] { display: none !important; }
+
+/* Calendar hover tooltip */
+.cal-tip {
+  position: absolute;
+  transform: translate(-50%, -6px);
+  background: #111827;       /* dark neutral */
+  color: #fff;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 9999;
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
+}
+.cal-tip::after {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: #111827;
+}
+
 /* Mobile tweak */
 @media (max-width: 720px) {
   .year-cal { grid-template-columns: repeat(2, 1fr); }
