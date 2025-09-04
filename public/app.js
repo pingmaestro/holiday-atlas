@@ -1,4 +1,4 @@
-// Holiday Atlas app.js — dynamic year, All Year + Today views, List/Calendar detail modes
+// Holiday Atlas app.js — dynamic year, All Year + Today views, List/Calendar detail modes (local-date fix)
 
 (async function () {
   // ---- Dynamic YEAR with optional ?year= override ----
@@ -11,6 +11,15 @@
   const esc = s => String(s).replace(/[&<>"']/g, m => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[m]));
+
+  // ---- Parse ISO (YYYY-MM-DD) as a local Date (avoid UTC off-by-one) ----
+  function parseLocalISODate(iso) {
+    // Expect "YYYY-MM-DD"
+    const [y, m, d] = String(iso).split('-').map(Number);
+    return Number.isInteger(y) && Number.isInteger(m) && Number.isInteger(d)
+      ? new Date(y, m - 1, d) // local time
+      : new Date(iso);        // fallback
+  }
 
   // ---- State ----
   let TOTALS = {};   // { FR:{ name, national, regional }, ... }
@@ -155,19 +164,22 @@
       return;
     }
 
-    // List mode
-    const rows = list.map(h => {
-      const pretty = new Date(h.date).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
-      const nm = h.localName && h.localName !== h.name
-        ? `${esc(h.name)} <span class="note">(${esc(h.localName)})</span>`
-        : esc(h.name);
-      const scope = h.global ? 'national' : 'regional';
-      return `<div class="row">
-        <div class="cell">${pretty}</div>
-        <div class="cell">${nm}</div>
-        <div class="cell"><span class="pill">${scope}</span></div>
-      </div>`;
-    }).join('');
+    // List mode (sorted by date, parsed locally)
+    const rows = list
+      .slice()
+      .sort((a, b) => parseLocalISODate(a.date) - parseLocalISODate(b.date))
+      .map(h => {
+        const pretty = parseLocalISODate(h.date).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
+        const nm = h.localName && h.localName !== h.name
+          ? `${esc(h.name)} <span class="note">(${esc(h.localName)})</span>`
+          : esc(h.name);
+        const scope = h.global ? 'national' : 'regional';
+        return `<div class="row">
+          <div class="cell">${pretty}</div>
+          <div class="cell">${nm}</div>
+          <div class="cell"><span class="pill">${scope}</span></div>
+        </div>`;
+      }).join('');
 
     detailsBody.innerHTML = `<div class="rows">${rows}</div>`;
   }
