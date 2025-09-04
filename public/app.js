@@ -1,4 +1,4 @@
-// Holiday Atlas app.js — dynamic year, All Year + Today views, List/Calendar detail modes (local-date fix)
+// Holiday Atlas app.js — dynamic year, All Year + Today views, List/Calendar detail modes (national-only + date UX fixes)
 
 (async function () {
   // ---- Dynamic YEAR with optional ?year= override ----
@@ -14,11 +14,10 @@
 
   // ---- Parse ISO (YYYY-MM-DD) as a local Date (avoid UTC off-by-one) ----
   function parseLocalISODate(iso) {
-    // Expect "YYYY-MM-DD"
     const [y, m, d] = String(iso).split('-').map(Number);
     return Number.isInteger(y) && Number.isInteger(m) && Number.isInteger(d)
-      ? new Date(y, m - 1, d) // local time
-      : new Date(iso);        // fallback
+      ? new Date(y, m - 1, d) // local midnight
+      : new Date(iso);
   }
 
   // ---- State ----
@@ -56,7 +55,7 @@
       return TODAY_CACHE.list;
     }
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000); // 15s cap
+    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
       const res = await fetch(`/api/todaySet?year=${year}`, { cache: 'no-store', signal: controller.signal });
       clearTimeout(timeout);
@@ -86,38 +85,47 @@
   }
 
   // ---- Calendar renderer (12-month year grid) ----
-  function renderCalendarHTML(year, holidays) {
-    // Map yyyy-mm-dd -> holiday name(s)
-    const map = new Map();
+  function renderCalendarHTML(year, holidays /* already filtered to national */) {
+    // 2) Make date obvious: bold + light green bg
+    // 3) Hover shows full date + full holiday name
+    // 4) Past dates light grey
+    const map = new Map(); // yyyy-mm-dd -> [names]
     holidays.forEach(h => {
-      const d = h.date; // ISO yyyy-mm-dd
+      const d = h.date;
       if (!map.has(d)) map.set(d, []);
       map.get(d).push(h.name || h.localName || 'Holiday');
     });
 
+    // normalize "today" to local midnight
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
     const monthNames = Array.from({ length: 12 }, (_, i) =>
       new Date(year, i, 1).toLocaleString(undefined, { month: 'long' })
     );
-    const dow = ['S','M','T','W','T','F','S']; // Sunday-start; adjust if you want Monday-start
+    const dow = ['S','M','T','W','T','F','S']; // Sunday-start
 
     const months = monthNames.map((mn, mIdx) => {
       const first = new Date(year, mIdx, 1);
       const daysInMonth = new Date(year, mIdx + 1, 0).getDate();
-      const startDOW = first.getDay(); // 0..6
+      const startDOW = first.getDay();
 
-      // leading blanks
       const blanks = Array.from({ length: startDOW }, () => `<div class="cal-day"></div>`);
 
-      // actual days
       const days = Array.from({ length: daysInMonth }, (_, i) => {
         const day = i + 1;
+        const dLocal = new Date(year, mIdx, day);
         const yyyy = year;
         const mm = String(mIdx + 1).padStart(2, '0');
         const dd = String(day).padStart(2, '0');
         const key = `${yyyy}-${mm}-${dd}`;
         const isHoliday = map.has(key);
-        const title = isHoliday ? map.get(key).join(', ') : '';
-        return `<div class="cal-day${isHoliday ? ' holiday' : ''}" title="${esc(title)}">${day}</div>`;
+        const isPast = dLocal < today;
+        const names = isHoliday ? map.get(key) : [];
+        const longDate = dLocal.toLocaleDateString(undefined, { weekday:'short', year:'numeric', month:'long', day:'numeric' });
+        const title = isHoliday ? `${longDate} — ${names.join(', ')}` : longDate;
+
+        return `<div class="cal-day${isHoliday ? ' holiday' : ''}${isPast ? ' past' : ''}" title="${esc(title)}">${day}</div>`;
       });
 
       return `
@@ -137,10 +145,17 @@
   // ---- Details renderer (List/Calendar) ----
   function renderDetails(iso2, displayName, holidays, regionCode = null, mode = CURRENT_MODE) {
     CURRENT_DETAILS = { iso2, displayName, holidays, regionCode };
-    const suffix = regionCode ? ` — ${regionCode}` : '';
-    detailsTitle.textContent = `${displayName}${suffix} — Holidays (${YEAR})`;
 
-    // Activate correct tab buttons
+    // 1) Only national holidays in the first block; remove tags/third column
+    let list = Array.isArray(holidays) ? holidays : [];
+    // If you ever want region-aware behavior, tweak here.
+    const natList = list.filter(h => h && h.global === true);
+
+    // 5) Title: There are [N] National Holidays in [Country] for [Year]
+    const count = natList.length;
+    detailsTitle.textContent = `There ${count === 1 ? 'is' : 'are'} ${count} National Holiday${count === 1 ? '' : 's'} in ${displayName} for ${YEAR}`;
+
+    // Toggle the tab UI
     const btnList = document.getElementById('details-view-list');
     const btnCal  = document.getElementById('details-view-cal');
     if (btnList && btnCal) {
@@ -150,41 +165,36 @@
       btnCal.setAttribute('aria-selected', mode === 'cal' ? 'true' : 'false');
     }
 
-    // Filter for region if present
-    let list = Array.isArray(holidays) ? holidays : [];
-    if (regionCode) list = list.filter(h => Array.isArray(h.counties) && h.counties.includes(regionCode));
-
-    if (!list.length) {
-      detailsBody.innerHTML = `<div class="note">No data available.</div>`;
+    if (!natList.length) {
+      detailsBody.innerHTML = `<div class="note">No national holidays available.</div>`;
       return;
     }
 
     if (mode === 'cal') {
-      detailsBody.innerHTML = renderCalendarHTML(YEAR, list);
+      detailsBody.innerHTML = renderCalendarHTML(YEAR, natList);
       return;
     }
 
-    // List mode (sorted by date, parsed locally)
-    const rows = list
+    // LIST mode (two columns: date, name — no "national/regional" pill)
+    const rows = natList
       .slice()
       .sort((a, b) => parseLocalISODate(a.date) - parseLocalISODate(b.date))
       .map(h => {
-        const pretty = parseLocalISODate(h.date).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
+        const d = parseLocalISODate(h.date);
+        const pretty = d.toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
         const nm = h.localName && h.localName !== h.name
           ? `${esc(h.name)} <span class="note">(${esc(h.localName)})</span>`
           : esc(h.name);
-        const scope = h.global ? 'national' : 'regional';
-        return `<div class="row">
+        return `<div class="row two-cols">
           <div class="cell">${pretty}</div>
           <div class="cell">${nm}</div>
-          <div class="cell"><span class="pill">${scope}</span></div>
         </div>`;
       }).join('');
 
     detailsBody.innerHTML = `<div class="rows">${rows}</div>`;
   }
 
-  // ---- Region list card & click wiring ----
+  // ---- Region list card & click wiring (unchanged) ----
   function renderRegionList(iso2) {
     const anchor = document.getElementById('region-list-anchor');
     if (!anchor) return;
@@ -221,7 +231,7 @@
         evt.preventDefault();
         const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
         const countryName = (TOTALS[iso2]?.name) || iso2;
-        renderDetails(iso2, countryName, holidays, code, CURRENT_MODE); // keep current mode
+        renderDetails(iso2, countryName, holidays, code, CURRENT_MODE); // still shows national only
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
       });
     });
@@ -239,12 +249,12 @@
 
     // 2) Build series data using hc-key (lowercased ISO2)
     const rows = Object.entries(TOTALS).map(([code, rec]) => [
-      code.toLowerCase(),                              // hc-key
+      code.toLowerCase(),
       Number.isFinite(rec?.national) ? rec.national : null,
       rec?.name || code
     ]);
 
-    // 3) Load a high-res Robinson world map (crisper)
+    // 3) Load a high-res Robinson world map
     const topology = await fetch('https://code.highcharts.com/mapdata/custom/world-robinson-highres.geo.json')
       .then(r => r.json());
 
@@ -267,7 +277,6 @@
         }
       },
 
-      // 🔒 Disable all zoom interactions/buttons
       mapNavigation: {
         enabled: false,
         enableButtons: false,
@@ -337,12 +346,10 @@
       series: [{
         type: 'map',
         mapData: topology,
-        data: rows,                                  // [hc-key, value, label]
+        data: rows,
         keys: ['hc-key','value','label'],
         joinBy: ['hc-key','hc-key'],
         allAreas: true,
-
-        // Borders & selection
         borderColor: '#cfd7e6',
         borderWidth: 0.20,
         allowPointSelect: true,
@@ -350,10 +357,8 @@
           hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.2, borderColor: '#000', brightness: 0.15 },
           select: { color: '#ffe082', borderColor: '#000', borderWidth: 0.2, brightness: 0.15 }
         },
-
         dataLabels: { enabled: false },
         inactiveOtherPoints: false,
-
         point: {
           events: {
             mouseOver: function () {
@@ -367,12 +372,10 @@
               this.setState();
             },
             click: async function () {
-              // Highlight + render table (no zoom)
               const hcKey = (this.options['hc-key'] || this['hc-key'] || '').toUpperCase();
               const iso2  = hcKey;
               const display = (TOTALS[iso2]?.name) || this.name || iso2;
 
-              // Select only one
               this.series.points.forEach(p => { if (p !== this && p.selected) p.select(false, false); });
               this.select(true, false);
 
@@ -409,7 +412,7 @@
       });
     }
 
-    // ---- Warm the Today cache in the background ----
+    // Warm the Today cache
     fetchTodaySet(YEAR).catch(() => {});
 
     // ---- Details view toggles (List / Calendar) ----
@@ -452,7 +455,6 @@
         return;
       }
 
-      // TODAY: show loader, use cached fetch, then render
       setLoading(true);
       const today = await fetchTodaySet(YEAR);
       const todaySet = new Set(today);

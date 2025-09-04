@@ -96,6 +96,13 @@ header {
 }
 .rows .row:last-child { border-bottom: none; }
 
+.rows .row.two-cols { 
+  display: grid; 
+  grid-template-columns: 140px 1fr; 
+  gap: 12px; 
+}
+
+
 .pill {
   display: inline-block;
   padding: 2px 8px;
@@ -180,11 +187,22 @@ header {
 }
 .cal-day.muted { color: #9ca3af; }              /* prev/next month spill if we ever show */
 .cal-day.holiday {
-  border-color: #2e7d32;                         /* green outline */
+  border-color: #2e7d32;
+  background: #e8f5e9; 
+  font-weight: 700;                       
 }
 .cal-day.holiday:hover {
   background: #e8f5e9;                           /* subtle hover */
   cursor: help;
+}
+
+.cal-day.past {
+  color: #9ca3af;
+  border-color: #e5e7eb;
+}
+.cal-day.holiday.past {
+  background: #f1f7f3;      /* slightly muted green for past holidays */
+  border-color: #cfe6d4;
 }
 
 /* Mobile tweak */
