@@ -102,7 +102,6 @@
         const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
         const countryName = (TOTALS[iso2]?.name) || iso2;
         renderDetails(iso2, countryName, holidays, code);
-        detailsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     });
   }
@@ -227,7 +226,7 @@
         allowPointSelect: true,
         states: {
           hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.2, borderColor: '#000', brightness: 0.15 },
-          select: { color: null, borderColor: '#000', borderWidth: 1.4, brightness: 0.18 }
+          select: { color: '#ffe082', borderColor: '#000', borderWidth: 0.2, brightness: 0.15 }
         },
 
         dataLabels: { enabled: false },
@@ -259,7 +258,6 @@
                 const holidays = await getCountryDetails(iso2);
                 renderDetails(iso2, display, holidays, null);
                 renderRegionList(iso2);
-                detailsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
               } catch {
                 renderDetails(iso2, display, [], null);
                 renderRegionList(iso2);
