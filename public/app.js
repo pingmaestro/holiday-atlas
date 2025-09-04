@@ -22,6 +22,43 @@
   const detailsEl = document.getElementById('details');
   const detailsTitle = document.getElementById('details-title');
   const detailsBody = document.getElementById('details-body');
+  const loadingEl = document.getElementById('view-loading'); // A) loader chip
+
+  // A) ---- Loader + cache helpers ----
+  let TODAY_CACHE = { at: 0, list: [] };
+  const TODAY_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+  function setLoading(isLoading, label = 'Loading Today…') {
+    if (!loadingEl) return;
+    if (isLoading) {
+      loadingEl.textContent = label;
+      loadingEl.hidden = false;
+      document.body.setAttribute('aria-busy', 'true');
+    } else {
+      loadingEl.hidden = true;
+      document.body.removeAttribute('aria-busy');
+    }
+  }
+
+  async function fetchTodaySet(year) {
+    const now = Date.now();
+    if (now - TODAY_CACHE.at < TODAY_TTL_MS && TODAY_CACHE.list.length) {
+      return TODAY_CACHE.list;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000); // 15s cap
+
+    try {
+      const res = await fetch(`/api/todaySet?year=${year}`, { cache: 'no-store', signal: controller.signal });
+      clearTimeout(timeout);
+      const { today = [] } = res.ok ? await res.json() : { today: [] };
+      TODAY_CACHE = { at: now, list: today };
+      return today;
+    } catch {
+      clearTimeout(timeout);
+      return TODAY_CACHE.list || [];
+    }
+  }
 
   async function getCountryDetails(iso2) {
     const key = `${iso2}-${YEAR}`;
@@ -97,7 +134,7 @@
     rows.querySelectorAll('.region-row').forEach(el => {
       const code = el.getAttribute('data-code');
       el.title = `${code}: ${m[code]} regional holidays`;
-      el.addEventListener('click', () => {
+      el.addEventListener('click', (evt) => { // fix: accept evt
         evt.preventDefault();
         const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
         const countryName = (TOTALS[iso2]?.name) || iso2;
@@ -288,6 +325,9 @@
       });
     }
 
+    // B) Warm the Today cache in the background
+    fetchTodaySet(YEAR).catch(() => {});
+
     // ----- View switching -----
     const ALL_DATA = rows.slice();
     const ALL_COLOR_CLASSES = [
@@ -312,9 +352,9 @@
         return;
       }
 
-      // TODAY: ask backend which countries have a holiday *today* (their local date)
-      const res = await fetch(`/api/todaySet?year=${YEAR}`, { cache: 'no-store' });
-      const { today = [] } = res.ok ? await res.json() : { today: [] };
+      // C) TODAY: show loader, use cached fetch, then render
+      setLoading(true);
+      const today = await fetchTodaySet(YEAR);
       const todaySet = new Set(today);
 
       const iso2List = Object.keys(TOTALS);
@@ -337,6 +377,7 @@
 
       chart.series[0].setData(todayData, false);
       chart.redraw();
+      setLoading(false);
     }
 
   } catch (err) {

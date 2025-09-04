@@ -107,6 +107,92 @@ header {
 }
 .note { color: var(--muted); font-size: 12px; }
 
+/* Details header with view toggles */
+.details-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.details-views {
+  display: inline-flex;
+  gap: 8px;
+}
+.details-view {
+  appearance: none;
+  border: 1px solid var(--chip);
+  background: #fff;
+  color: #111827;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.details-view.is-active {
+  background: #0b3d91;
+  color: #fff;
+  border-color: #0b3d91;
+}
+
+/* Keep your existing list layout when list is shown */
+#details-body .rows .row { display: grid; }
+
+/* Year calendar (12 months) */
+.year-cal {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  font-size: 12px;
+}
+.cal-month {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}
+.cal-month h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.cal-dow {
+  text-align: center;
+  color: var(--muted);
+  font-weight: 600;
+  padding: 4px 0;
+}
+.cal-day {
+  height: 28px;
+  line-height: 28px;
+  text-align: center;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  position: relative;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-day.muted { color: #9ca3af; }              /* prev/next month spill if we ever show */
+.cal-day.holiday {
+  border-color: #2e7d32;                         /* green outline */
+}
+.cal-day.holiday:hover {
+  background: #e8f5e9;                           /* subtle hover */
+  cursor: help;
+}
+
+/* Mobile tweak */
+@media (max-width: 720px) {
+  .year-cal { grid-template-columns: repeat(2, 1fr); }
+}
+
+
 /* Crisper vector edges & constant stroke thickness on zoom */
 .highcharts-series.highcharts-map-series path {
   vector-effect: non-scaling-stroke;
@@ -122,6 +208,33 @@ header {
 .highcharts-series.highcharts-map-series .highcharts-point {
   opacity: 1 !important;
 }
+
+.loading-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--chip);
+  border-radius: 999px;
+  background: #fff;
+  color: #111827;
+  margin: 4px 0 8px;
+}
+.loading-chip[hidden] { display: none; }
+
+/* optional: tiny spinner dot */
+.loading-chip::before {
+  content: "";
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  display: inline-block;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 
 /* ---- Responsive ---- */
 @media (max-width: 720px) {

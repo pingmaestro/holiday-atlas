@@ -20,12 +20,18 @@
       <button class="view-tag is-active" role="tab" aria-selected="true" data-view="all">All Year</button>
       <button class="view-tag" role="tab" aria-selected="false" data-view="today">Today</button>
     </div>
-    
+    <div id="view-loading" class="loading-chip" hidden>Loading Today…</div>
     <div class="map-wrap">
       <div id="wpr-map" role="img" aria-label="Choropleth map of national holidays"></div>
       <article id="details" class="card">
-        <div><strong id="details-title">Holidays (2025)</strong></div>
-        <div id="details-body" class="rows"></div>
+        <div class="details-header">
+          <strong id="details-title">Holidays (2025)</strong>
+          <div class="details-views" role="tablist" aria-label="Detail views">
+            <button id="details-view-list"  class="details-view is-active" role="tab" aria-selected="true">List</button>
+            <button id="details-view-cal"   class="details-view" role="tab" aria-selected="false">Calendar</button>
+          </div>
+        </div>
+        <div id="details-body"></div>
       </article>
     </div>
 
