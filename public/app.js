@@ -1,9 +1,13 @@
-// Holiday Atlas app.js build v12 — Highcharts Maps (crisp, all areas, snappy hover)
+// Holiday Atlas app.js — dynamic year, All Year + Today views
 
 (async function () {
-  const YEAR = 2025;
+  // Dynamic YEAR with optional ?year= override
+  const yParam = Number(new URLSearchParams(location.search).get('year'));
+  const YEAR = Number.isInteger(yParam) && yParam >= 1900 && yParam <= 2100
+    ? yParam
+    : new Date().getFullYear();
 
-  // Tiny HTML escaper (some names contain special chars)
+  // Tiny HTML escaper
   const esc = s => String(s).replace(/[&<>"']/g, m => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[m]));
@@ -18,27 +22,6 @@
   const detailsEl = document.getElementById('details');
   const detailsTitle = document.getElementById('details-title');
   const detailsBody = document.getElementById('details-body');
-
-  // ----- Helpers -----
-  function makeIntegerClasses(values, steps = 6) {
-    if (!values.length) return [{ to: 1, color: '#d9d9d9', name: 'No data' }];
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    if (min === max) return [{ from: min, color: '#3c7fd6', name: String(min) }];
-    const range = max - min;
-    const step = Math.max(1, Math.round(range / steps));
-    const colors = ['#e8f5e9','#ccebd6','#b3dfdf','#95cce6','#6fb4e5','#3c7fd6'];
-
-    const classes = [];
-    let lo = min, idx = 0;
-    while (lo <= max && idx < colors.length) {
-      const hi = Math.min(max, lo + step - 1);
-      const name = idx === 0 ? `≤ ${hi}` : (hi === max ? `≥ ${lo}` : `${lo}–${hi}`);
-      classes.push({ from: idx === 0 ? undefined : lo, to: hi, color: colors[idx], name });
-      lo = hi + 1; idx++;
-    }
-    return classes;
-  }
 
   async function getCountryDetails(iso2) {
     const key = `${iso2}-${YEAR}`;
@@ -125,9 +108,10 @@
   }
 
   try {
+    console.log("Holiday Atlas app.js — dynamic YEAR =", YEAR);
+
     // 1) Load totals JSON (cache-busted)
-    console.log("Holiday Atlas app.js build v12");
-    const totalsRes = await fetch(`/data/totals-2025.json?v=${Date.now()}`, { cache: 'no-store' });
+    const totalsRes = await fetch(`/data/totals-${YEAR}.json?v=${Date.now()}`, { cache: 'no-store' });
     const totalsJSON = await totalsRes.json();
     TOTALS  = totalsJSON.totals  || {};
     REGIONS = totalsJSON.regions || {};
@@ -138,7 +122,6 @@
       Number.isFinite(rec?.national) ? rec.national : null,
       rec?.name || code
     ]);
-    const nationalValues = rows.map(r => r[1]).filter(v => v !== null);
 
     // 3) Load a high-res Robinson world map (crisper)
     const topology = await fetch('https://code.highcharts.com/mapdata/custom/world-robinson-highres.geo.json')
@@ -221,7 +204,7 @@
         series: {
           states: {
             hover: { animation: { duration: 0 }, halo: false },
-            inactive: { opacity: 1 } // keep other borders visible
+            inactive: { opacity: 1 }
           },
           animation: false,
           nullInteraction: true,
@@ -235,20 +218,20 @@
         mapData: topology,
         data: rows,                                  // [hc-key, value, label]
         keys: ['hc-key','value','label'],
-        joinBy: ['hc-key','hc-key'],                 // join by hc-key so all shapes are present
-        allAreas: true,                              // draw countries even without data
+        joinBy: ['hc-key','hc-key'],
+        allAreas: true,
 
-        // Borders and selection style
+        // Borders & selection
         borderColor: '#cfd7e6',
         borderWidth: 0.20,
-        allowPointSelect: true,                      // ← enable click-to-select
+        allowPointSelect: true,
         states: {
           hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.2, borderColor: '#000', brightness: 0.15 },
-          select: { color: null, borderColor: '#000', borderWidth: 1.4, brightness: 0.18 } // ← persistent selected look
+          select: { color: null, borderColor: '#000', borderWidth: 1.4, brightness: 0.18 }
         },
 
         dataLabels: { enabled: false },
-        inactiveOtherPoints: false,                  // never dim the rest on hover
+        inactiveOtherPoints: false,
 
         point: {
           events: {
@@ -263,12 +246,12 @@
               this.setState();
             },
             click: async function () {
-              // ❌ no zoomTo — we only highlight + render table
+              // Highlight + render table (no zoom)
               const hcKey = (this.options['hc-key'] || this['hc-key'] || '').toUpperCase();
-              const iso2  = hcKey; // hc-key is ISO2 lowercased in map, so uppercase it for API
+              const iso2  = hcKey;
               const display = (TOTALS[iso2]?.name) || this.name || iso2;
 
-              // Toggle selection so exactly one stays selected
+              // Select only one
               this.series.points.forEach(p => { if (p !== this && p.selected) p.select(false, false); });
               this.select(true, false);
 
@@ -287,29 +270,25 @@
       }]
     });
 
-    // ---- View tag toggle (All Year / Today) ----
+    // ---- View tags (All Year / Today) ----
     const tagsEl = document.querySelector('.view-tags');
     if (tagsEl) {
       tagsEl.addEventListener('click', (e) => {
         const btn = e.target.closest('.view-tag');
         if (!btn) return;
 
-        // Visual active state
         tagsEl.querySelectorAll('.view-tag').forEach(b => {
           const active = b === btn;
           b.classList.toggle('is-active', active);
           b.setAttribute('aria-selected', active ? 'true' : 'false');
         });
 
-        // Switch view
-        const view = btn.dataset.view; // 'all' or 'today'
-        setView(view);
+        setView(btn.dataset.view); // 'all' or 'today'
       });
     }
 
-    // ----- View switching logic -----
-    // Save original data and color classes to restore when leaving "Today"
-    const ALL_DATA = rows.slice(); // [hc-key, value, label]
+    // ----- View switching -----
+    const ALL_DATA = rows.slice();
     const ALL_COLOR_CLASSES = [
       { to: 4,              color: '#d9f2e3', name: '≤ 4' },
       { from: 5,  to: 7,    color: '#a9d9d8', name: '5-7' },
@@ -324,7 +303,6 @@
       CURRENT_VIEW = view;
 
       if (view === 'all') {
-        // Restore original data & legend
         chart.update({
           colorAxis: { dataClasses: ALL_COLOR_CLASSES, dataClassColor: 'category', nullColor: '#d9d9d9' }
         }, false);
@@ -333,31 +311,18 @@
         return;
       }
 
-      // ---- TODAY VIEW ----
-      // Simple approach: use the user's local date (upgrade later to per-country tz if needed)
-      const todayLocal = new Date();
-      const yyyy = todayLocal.getFullYear();
-      const mm = String(todayLocal.getMonth() + 1).padStart(2, '0');
-      const dd = String(todayLocal.getDate()).padStart(2, '0');
-      const todayStr = `${yyyy}-${mm}-${dd}`;
+      // TODAY: ask backend which countries have a holiday *today* (their local date)
+      const res = await fetch(`/api/todaySet?year=${YEAR}`, { cache: 'no-store' });
+      const { today = [] } = res.ok ? await res.json() : { today: [] };
+      const todaySet = new Set(today);
 
-      // Build a set of ISO2 codes that have a NATIONAL holiday today
       const iso2List = Object.keys(TOTALS);
-      const holidaySets = await Promise.all(iso2List.map(async iso2 => {
-        const list = await getCountryDetails(iso2);
-        const hit = list.some(h => h.global === true && h.date === todayStr);
-        return hit ? iso2 : null;
-      }));
-      const todaySet = new Set(holidaySets.filter(Boolean));
-
-      // Build data as binary: 1 = holiday today, null = none (for gray)
       const todayData = iso2List.map(iso2 => [
-        iso2.toLowerCase(),            // hc-key
-        todaySet.has(iso2) ? 1 : null, // value
-        TOTALS[iso2]?.name || iso2     // label
+        iso2.toLowerCase(),
+        todaySet.has(iso2) ? 1 : null,
+        TOTALS[iso2]?.name || iso2
       ]);
 
-      // Update legend to binary classes
       chart.update({
         colorAxis: {
           dataClassColor: 'category',
