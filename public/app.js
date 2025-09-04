@@ -1,52 +1,62 @@
-// Holiday Atlas app.js — YEAR views + List/Calendar (national-only, calendar styling, custom tooltip)
+// Holiday Atlas app.js — YEAR views + List/Calendar (national-only) + Long Weekend tags/overlay
 
 (async function () {
+  // ---- Dynamic YEAR with optional ?year= override ----
   const yParam = Number(new URLSearchParams(location.search).get('year'));
   const YEAR = Number.isInteger(yParam) && yParam >= 1900 && yParam <= 2100
     ? yParam
     : new Date().getFullYear();
 
+  // ---- Tiny HTML escaper ----
   const esc = s => String(s).replace(/[&<>"']/g, m => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[m]));
 
+  // ---- Parse ISO (YYYY-MM-DD) as local Date (avoid UTC off-by-one) ----
   function parseLocalISODate(iso) {
     const [y, m, d] = String(iso).split('-').map(Number);
     return Number.isInteger(y) && Number.isInteger(m) && Number.isInteger(d)
-      ? new Date(y, m - 1, d)
-      : new Date(iso);
+      ? new Date(y, m - 1, d) // local midnight
+      : new Date(iso);        // fallback
   }
 
-  let TOTALS = {};
-  let REGIONS = {};
-  const detailsCache = new Map();
-  let CURRENT_VIEW = 'all';
-  let CURRENT_MODE = 'list';
-  let CURRENT_DETAILS = null;
+  // ---- State ----
+  let TOTALS = {};   // { FR:{ name, national, regional }, ... }
+  let REGIONS = {};  // { FR:{ 'FR-75': n, ... }, ... }
+  const detailsCache = new Map();      // key: "FR-2025" -> holidays[]
+  const longWeekendCache = new Map();  // key: "FR-2025" -> { list, dateSet }
+  let CURRENT_VIEW = 'all';            // 'all' or 'today'
+  let CURRENT_MODE = 'list';           // 'list' or 'cal'
+  let CURRENT_DETAILS = null;          // { iso2, displayName, holidays, regionCode }
 
+  // ---- Elements ----
   const detailsTitle = document.getElementById('details-title');
   const detailsBody  = document.getElementById('details-body');
   const loadingEl    = document.getElementById('view-loading');
 
+  // ---- Loader + cache helpers (Today view) ----
   let TODAY_CACHE = { at: 0, list: [] };
   const TODAY_TTL_MS = 10 * 60 * 1000;
 
   function setLoading(isLoading, label = 'Loading Today…') {
     if (!loadingEl) return;
-    loadingEl.hidden = !isLoading;
     if (isLoading) {
       loadingEl.textContent = label;
+      loadingEl.hidden = false;
       document.body.setAttribute('aria-busy', 'true');
     } else {
+      loadingEl.hidden = true;
       document.body.removeAttribute('aria-busy');
     }
   }
 
   async function fetchTodaySet(year) {
     const now = Date.now();
-    if (now - TODAY_CACHE.at < TODAY_TTL_MS && TODAY_CACHE.list.length) return TODAY_CACHE.list;
+    if (now - TODAY_CACHE.at < TODAY_TTL_MS && TODAY_CACHE.list.length) {
+      return TODAY_CACHE.list;
+    }
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), 15000); // 15s cap
     try {
       const res = await fetch(`/api/todaySet?year=${year}`, { cache: 'no-store', signal: controller.signal });
       clearTimeout(timeout);
@@ -75,22 +85,57 @@
     }
   }
 
-  // ---- Calendar renderer ----
-  function renderCalendarHTML(year, holidays) {
-    const map = new Map();
+  // ---- Long Weekend fetcher (Nager.Date) ----
+  // API: https://date.nager.at/api/v3/LongWeekend/{year}/{countryCode}
+  async function getLongWeekends(iso2, year) {
+    const key = `${iso2}-${year}`;
+    if (longWeekendCache.has(key)) return longWeekendCache.get(key);
+
+    try {
+      const url = `https://date.nager.at/api/v3/LongWeekend/${year}/${iso2}`;
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(String(res.status));
+      const list = await res.json(); // [{ startDate, endDate, dayCount, needBridgeDay }, ...]
+      // Build a Set of yyyy-mm-dd strings inside any LW range
+      const dateSet = new Set();
+      for (const lw of list) {
+        const sd = parseLocalISODate(lw.startDate);
+        const ed = parseLocalISODate(lw.endDate);
+        for (let d = new Date(sd); d <= ed; d.setDate(d.getDate() + 1)) {
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          dateSet.add(`${y}-${m}-${dd}`);
+        }
+      }
+      const payload = { list, dateSet };
+      longWeekendCache.set(key, payload);
+      return payload;
+    } catch {
+      const payload = { list: [], dateSet: new Set() };
+      longWeekendCache.set(key, payload);
+      return payload;
+    }
+  }
+
+  // ---- Calendar renderer (12-month year grid) ----
+  function renderCalendarHTML(year, holidays, longWeekendDates /* Set<string> yyyy-mm-dd */) {
+    // Map yyyy-mm-dd -> [holiday names]
+    const holidayMap = new Map();
     holidays.forEach(h => {
       const d = h.date;
-      if (!map.has(d)) map.set(d, []);
-      map.get(d).push(h.name || h.localName || 'Holiday');
+      if (!holidayMap.has(d)) holidayMap.set(d, []);
+      holidayMap.get(d).push(h.name || h.localName || 'Holiday');
     });
 
+    // normalize "today" to local midnight
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     const monthNames = Array.from({ length: 12 }, (_, i) =>
       new Date(year, i, 1).toLocaleString(undefined, { month: 'long' })
     );
-    const dow = ['S','M','T','W','T','F','S'];
+    const dow = ['S','M','T','W','T','F','S']; // Sunday-start
 
     const months = monthNames.map((mn, mIdx) => {
       const first = new Date(year, mIdx, 1);
@@ -107,14 +152,26 @@
         const dd = String(day).padStart(2, '0');
         const key = `${yyyy}-${mm}-${dd}`;
 
-        const isHoliday = map.has(key);
+        const isHoliday = holidayMap.has(key);
         const isPast = dLocal < today;
+        const inLW = longWeekendDates && longWeekendDates.has(key);
 
-        const names = isHoliday ? map.get(key) : [];
+        const names = isHoliday ? holidayMap.get(key) : [];
         const longDate = dLocal.toLocaleDateString(undefined, { weekday:'short', year:'numeric', month:'long', day:'numeric' });
-        const tip = isHoliday ? `${longDate} — ${names.join(', ')}` : longDate;
 
-        return `<div class="cal-day${isHoliday ? ' holiday' : ''}${isPast ? ' past' : ''}" data-tip="${esc(tip)}" aria-label="${esc(tip)}" tabindex="0">${day}</div>`;
+        // Tooltip text
+        let tip = longDate;
+        if (names.length) tip += ` — ${names.join(', ')}`;
+        if (inLW) tip += names.length ? ' • Long Weekend' : ' — Long Weekend';
+
+        const classes = [
+          'cal-day',
+          isHoliday ? 'holiday' : '',
+          isPast ? 'past' : '',
+          inLW ? 'lw' : ''
+        ].filter(Boolean).join(' ');
+
+        return `<div class="${classes}" data-tip="${esc(tip)}" aria-label="${esc(tip)}" tabindex="0">${day}</div>`;
       });
 
       return `
@@ -131,12 +188,13 @@
     return `<div class="year-cal">${months}</div>`;
   }
 
-  // ---- Custom tooltip ----
+  // ---- Lightweight calendar tooltip (custom) ----
   let calTipEl = null;
   function ensureCalTip() {
     if (calTipEl) return calTipEl;
     calTipEl = document.createElement('div');
     calTipEl.className = 'cal-tip';
+    calTipEl.setAttribute('role', 'tooltip');
     calTipEl.hidden = true;
     document.body.appendChild(calTipEl);
     return calTipEl;
@@ -153,26 +211,36 @@
   }
   function hideCalTip() { if (calTipEl) calTipEl.hidden = true; }
 
-  detailsBody.addEventListener('mouseover', e => {
+  // Delegate events on the details body (works across re-renders)
+  detailsBody.addEventListener('mouseover', (e) => {
     const day = e.target.closest('.cal-day');
-    if (day) showCalTipFor(day);
+    if (!day || !detailsBody.contains(day)) return;
+    showCalTipFor(day);
   });
   detailsBody.addEventListener('mouseout', hideCalTip);
-  detailsBody.addEventListener('focusin', e => {
+  detailsBody.addEventListener('focusin', (e) => {
     const day = e.target.closest('.cal-day');
     if (day) showCalTipFor(day);
   });
   detailsBody.addEventListener('focusout', hideCalTip);
   window.addEventListener('scroll', hideCalTip, { passive: true });
 
-  // ---- Details renderer ----
-  function renderDetails(iso2, displayName, holidays, regionCode = null, mode = CURRENT_MODE) {
+  // ---- Details renderer (List/Calendar) ----
+  async function renderDetails(iso2, displayName, holidays, regionCode = null, mode = CURRENT_MODE) {
     CURRENT_DETAILS = { iso2, displayName, holidays, regionCode };
 
-    const natList = (Array.isArray(holidays) ? holidays : []).filter(h => h && h.global === true);
+    // Only national holidays
+    const all = Array.isArray(holidays) ? holidays : [];
+    const natList = all.filter(h => h && h.global === true);
 
-    detailsTitle.textContent = `${displayName} — Holidays (${YEAR})`;
+    // Fetch long weekends for the country-year
+    const { dateSet: lwDates } = await getLongWeekends(iso2, YEAR);
 
+    // Title (keeping your format here)
+    const suffix = regionCode ? ` — ${regionCode}` : '';
+    detailsTitle.textContent = `${displayName}${suffix} — Holidays (${YEAR})`;
+
+    // Toggle the tab UI
     const btnList = document.getElementById('details-view-list');
     const btnCal  = document.getElementById('details-view-cal');
     if (btnList && btnCal) {
@@ -189,11 +257,12 @@
     }
 
     if (mode === 'cal') {
-      detailsBody.innerHTML = renderCalendarHTML(YEAR, natList);
+      detailsBody.innerHTML = renderCalendarHTML(YEAR, natList, lwDates);
       hideCalTip();
       return;
     }
 
+    // LIST mode: date + holiday name (+ Long Week-End Alert pill when inside LW)
     const rows = natList
       .slice()
       .sort((a, b) => parseLocalISODate(a.date) - parseLocalISODate(b.date))
@@ -203,9 +272,13 @@
         const nm = h.localName && h.localName !== h.name
           ? `${esc(h.name)} <span class="note">(${esc(h.localName)})</span>`
           : esc(h.name);
+
+        const inLW = lwDates.has(h.date);
+        const lwTag = inLW ? ` <span class="pill lw" title="This holiday falls within a long weekend">Long Week-End Alert</span>` : '';
+
         return `<div class="row two-cols">
           <div class="cell">${pretty}</div>
-          <div class="cell">${nm}</div>
+          <div class="cell">${nm}${lwTag}</div>
         </div>`;
       }).join('');
 
@@ -213,7 +286,7 @@
     hideCalTip();
   }
 
-  // ---- Region list card & click wiring (unchanged) ----
+  // ---- Region list card & click wiring ----
   function renderRegionList(iso2) {
     const anchor = document.getElementById('region-list-anchor');
     if (!anchor) return;
@@ -246,11 +319,11 @@
     rows.querySelectorAll('.region-row').forEach(el => {
       const code = el.getAttribute('data-code');
       el.title = `${code}: ${m[code]} regional holidays`;
-      el.addEventListener('click', (evt) => {
+      el.addEventListener('click', async (evt) => {
         evt.preventDefault();
         const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
         const countryName = (TOTALS[iso2]?.name) || iso2;
-        renderDetails(iso2, countryName, holidays, code, CURRENT_MODE); // still shows national only
+        await renderDetails(iso2, countryName, holidays, code, CURRENT_MODE); // still national-only in panel
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
       });
     });
@@ -268,12 +341,12 @@
 
     // 2) Build series data using hc-key (lowercased ISO2)
     const rows = Object.entries(TOTALS).map(([code, rec]) => [
-      code.toLowerCase(),
+      code.toLowerCase(),                              // hc-key
       Number.isFinite(rec?.national) ? rec.national : null,
       rec?.name || code
     ]);
 
-    // 3) Load a high-res Robinson world map
+    // 3) Load a high-res Robinson world map (crisper)
     const topology = await fetch('https://code.highcharts.com/mapdata/custom/world-robinson-highres.geo.json')
       .then(r => r.json());
 
@@ -296,6 +369,7 @@
         }
       },
 
+      // 🔒 Disable all zoom interactions/buttons
       mapNavigation: {
         enabled: false,
         enableButtons: false,
@@ -365,10 +439,12 @@
       series: [{
         type: 'map',
         mapData: topology,
-        data: rows,
+        data: rows,                                  // [hc-key, value, label]
         keys: ['hc-key','value','label'],
         joinBy: ['hc-key','hc-key'],
         allAreas: true,
+
+        // Borders & selection
         borderColor: '#cfd7e6',
         borderWidth: 0.20,
         allowPointSelect: true,
@@ -376,8 +452,10 @@
           hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.2, borderColor: '#000', brightness: 0.15 },
           select: { color: '#ffe082', borderColor: '#000', borderWidth: 0.2, brightness: 0.15 }
         },
+
         dataLabels: { enabled: false },
         inactiveOtherPoints: false,
+
         point: {
           events: {
             mouseOver: function () {
@@ -391,20 +469,22 @@
               this.setState();
             },
             click: async function () {
+              // Highlight + render table (no zoom)
               const hcKey = (this.options['hc-key'] || this['hc-key'] || '').toUpperCase();
               const iso2  = hcKey;
               const display = (TOTALS[iso2]?.name) || this.name || iso2;
 
+              // Select only one
               this.series.points.forEach(p => { if (p !== this && p.selected) p.select(false, false); });
               this.select(true, false);
 
               try {
                 const holidays = await getCountryDetails(iso2);
-                renderDetails(iso2, display, holidays, null, CURRENT_MODE);
+                await renderDetails(iso2, display, holidays, null, CURRENT_MODE);
                 renderRegionList(iso2);
                 if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
               } catch {
-                renderDetails(iso2, display, [], null, CURRENT_MODE);
+                await renderDetails(iso2, display, [], null, CURRENT_MODE);
                 renderRegionList(iso2);
                 if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
               }
@@ -431,13 +511,13 @@
       });
     }
 
-    // Warm the Today cache
+    // Warm the Today cache in the background
     fetchTodaySet(YEAR).catch(() => {});
 
     // ---- Details view toggles (List / Calendar) ----
     const detailsTabs = document.querySelector('.details-views');
     if (detailsTabs) {
-      detailsTabs.addEventListener('click', (e) => {
+      detailsTabs.addEventListener('click', async (e) => {
         const btn = e.target.closest('.details-view');
         if (!btn || !CURRENT_DETAILS) return;
 
@@ -446,7 +526,7 @@
         CURRENT_MODE = next;
 
         const { iso2, displayName, holidays, regionCode } = CURRENT_DETAILS;
-        renderDetails(iso2, displayName, holidays, regionCode, CURRENT_MODE);
+        await renderDetails(iso2, displayName, holidays, regionCode, CURRENT_MODE);
       });
     }
 
@@ -474,6 +554,7 @@
         return;
       }
 
+      // TODAY: show loader, use cached fetch, then render
       setLoading(true);
       const today = await fetchTodaySet(YEAR);
       const todaySet = new Set(today);

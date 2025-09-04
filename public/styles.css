@@ -102,7 +102,6 @@ header {
   gap: 12px; 
 }
 
-
 .pill {
   display: inline-block;
   padding: 2px 8px;
@@ -145,6 +144,8 @@ header {
 
 /* Keep your existing list layout when list is shown */
 #details-body .rows .row { display: grid; }
+
+.pill.lw { background: #fff0f0; border-color: #f4b4b4; color: #8b0000; }
 
 /* Year calendar (12 months) */
 .year-cal {
@@ -206,6 +207,12 @@ header {
   background: #f1f7f3;      /* slightly muted green for past holidays */
   border-color: #cfe6d4;
 }
+
+/* long weekend overlay (calendar) */
+.cal-day.lw { background: #fde8e8; /* light red */ }
+.cal-day.lw.holiday { box-shadow: inset 0 0 0 1px #f4b4b4; } /* optional outline */
+
+
 
 /* Generic hidden helper */
 [hidden] { display: none !important; }
