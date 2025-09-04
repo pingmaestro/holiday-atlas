@@ -1,30 +1,31 @@
-// Holiday Atlas app.js — dynamic year, All Year + Today views
+// Holiday Atlas app.js — dynamic year, All Year + Today views, List/Calendar detail modes
 
 (async function () {
-  // Dynamic YEAR with optional ?year= override
+  // ---- Dynamic YEAR with optional ?year= override ----
   const yParam = Number(new URLSearchParams(location.search).get('year'));
   const YEAR = Number.isInteger(yParam) && yParam >= 1900 && yParam <= 2100
     ? yParam
     : new Date().getFullYear();
 
-  // Tiny HTML escaper
+  // ---- Tiny HTML escaper ----
   const esc = s => String(s).replace(/[&<>"']/g, m => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[m]));
 
-  // State
+  // ---- State ----
   let TOTALS = {};   // { FR:{ name, national, regional }, ... }
   let REGIONS = {};  // { FR:{ 'FR-75': n, ... }, ... }
   const detailsCache = new Map(); // "FR-2025" -> holidays[]
-  let CURRENT_VIEW = 'all';
+  let CURRENT_VIEW = 'all';       // 'all' (year totals) or 'today'
+  let CURRENT_MODE = 'list';      // 'list' or 'cal' for the details pane
+  let CURRENT_DETAILS = null;     // { iso2, displayName, holidays, regionCode }
 
-  // Elements
-  const detailsEl = document.getElementById('details');
+  // ---- Elements ----
   const detailsTitle = document.getElementById('details-title');
-  const detailsBody = document.getElementById('details-body');
-  const loadingEl = document.getElementById('view-loading'); // A) loader chip
+  const detailsBody  = document.getElementById('details-body');
+  const loadingEl    = document.getElementById('view-loading');
 
-  // A) ---- Loader + cache helpers ----
+  // ---- Loader + cache helpers (Today view) ----
   let TODAY_CACHE = { at: 0, list: [] };
   const TODAY_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -47,7 +48,6 @@
     }
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000); // 15s cap
-
     try {
       const res = await fetch(`/api/todaySet?year=${year}`, { cache: 'no-store', signal: controller.signal });
       clearTimeout(timeout);
@@ -76,10 +76,72 @@
     }
   }
 
-  function renderDetails(iso2, displayName, holidays, regionCode = null) {
+  // ---- Calendar renderer (12-month year grid) ----
+  function renderCalendarHTML(year, holidays) {
+    // Map yyyy-mm-dd -> holiday name(s)
+    const map = new Map();
+    holidays.forEach(h => {
+      const d = h.date; // ISO yyyy-mm-dd
+      if (!map.has(d)) map.set(d, []);
+      map.get(d).push(h.name || h.localName || 'Holiday');
+    });
+
+    const monthNames = Array.from({ length: 12 }, (_, i) =>
+      new Date(year, i, 1).toLocaleString(undefined, { month: 'long' })
+    );
+    const dow = ['S','M','T','W','T','F','S']; // Sunday-start; adjust if you want Monday-start
+
+    const months = monthNames.map((mn, mIdx) => {
+      const first = new Date(year, mIdx, 1);
+      const daysInMonth = new Date(year, mIdx + 1, 0).getDate();
+      const startDOW = first.getDay(); // 0..6
+
+      // leading blanks
+      const blanks = Array.from({ length: startDOW }, () => `<div class="cal-day"></div>`);
+
+      // actual days
+      const days = Array.from({ length: daysInMonth }, (_, i) => {
+        const day = i + 1;
+        const yyyy = year;
+        const mm = String(mIdx + 1).padStart(2, '0');
+        const dd = String(day).padStart(2, '0');
+        const key = `${yyyy}-${mm}-${dd}`;
+        const isHoliday = map.has(key);
+        const title = isHoliday ? map.get(key).join(', ') : '';
+        return `<div class="cal-day${isHoliday ? ' holiday' : ''}" title="${esc(title)}">${day}</div>`;
+      });
+
+      return `
+        <section class="cal-month">
+          <h4>${esc(mn)} ${year}</h4>
+          <div class="cal-grid">
+            ${dow.map(d => `<div class="cal-dow">${d}</div>`).join('')}
+            ${blanks.join('')}${days.join('')}
+          </div>
+        </section>
+      `;
+    }).join('');
+
+    return `<div class="year-cal">${months}</div>`;
+  }
+
+  // ---- Details renderer (List/Calendar) ----
+  function renderDetails(iso2, displayName, holidays, regionCode = null, mode = CURRENT_MODE) {
+    CURRENT_DETAILS = { iso2, displayName, holidays, regionCode };
     const suffix = regionCode ? ` — ${regionCode}` : '';
     detailsTitle.textContent = `${displayName}${suffix} — Holidays (${YEAR})`;
 
+    // Activate correct tab buttons
+    const btnList = document.getElementById('details-view-list');
+    const btnCal  = document.getElementById('details-view-cal');
+    if (btnList && btnCal) {
+      btnList.classList.toggle('is-active', mode === 'list');
+      btnList.setAttribute('aria-selected', mode === 'list' ? 'true' : 'false');
+      btnCal.classList.toggle('is-active', mode === 'cal');
+      btnCal.setAttribute('aria-selected', mode === 'cal' ? 'true' : 'false');
+    }
+
+    // Filter for region if present
     let list = Array.isArray(holidays) ? holidays : [];
     if (regionCode) list = list.filter(h => Array.isArray(h.counties) && h.counties.includes(regionCode));
 
@@ -88,6 +150,12 @@
       return;
     }
 
+    if (mode === 'cal') {
+      detailsBody.innerHTML = renderCalendarHTML(YEAR, list);
+      return;
+    }
+
+    // List mode
     const rows = list.map(h => {
       const pretty = new Date(h.date).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
       const nm = h.localName && h.localName !== h.name
@@ -101,11 +169,14 @@
       </div>`;
     }).join('');
 
-    detailsBody.innerHTML = rows;
+    detailsBody.innerHTML = `<div class="rows">${rows}</div>`;
   }
 
+  // ---- Region list card & click wiring ----
   function renderRegionList(iso2) {
     const anchor = document.getElementById('region-list-anchor');
+    if (!anchor) return;
+
     let card = document.getElementById('region-list');
     if (!card) {
       card = document.createElement('article');
@@ -134,16 +205,17 @@
     rows.querySelectorAll('.region-row').forEach(el => {
       const code = el.getAttribute('data-code');
       el.title = `${code}: ${m[code]} regional holidays`;
-      el.addEventListener('click', (evt) => { // fix: accept evt
+      el.addEventListener('click', (evt) => {
         evt.preventDefault();
         const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
         const countryName = (TOTALS[iso2]?.name) || iso2;
-        renderDetails(iso2, countryName, holidays, code);
+        renderDetails(iso2, countryName, holidays, code, CURRENT_MODE); // keep current mode
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
       });
     });
   }
 
+  // ---- Main init ----
   try {
     console.log("Holiday Atlas app.js — dynamic YEAR =", YEAR);
 
@@ -294,11 +366,11 @@
 
               try {
                 const holidays = await getCountryDetails(iso2);
-                renderDetails(iso2, display, holidays, null);
+                renderDetails(iso2, display, holidays, null, CURRENT_MODE);
                 renderRegionList(iso2);
                 if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
               } catch {
-                renderDetails(iso2, display, [], null);
+                renderDetails(iso2, display, [], null, CURRENT_MODE);
                 renderRegionList(iso2);
                 if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
               }
@@ -325,10 +397,26 @@
       });
     }
 
-    // B) Warm the Today cache in the background
+    // ---- Warm the Today cache in the background ----
     fetchTodaySet(YEAR).catch(() => {});
 
-    // ----- View switching -----
+    // ---- Details view toggles (List / Calendar) ----
+    const detailsTabs = document.querySelector('.details-views');
+    if (detailsTabs) {
+      detailsTabs.addEventListener('click', (e) => {
+        const btn = e.target.closest('.details-view');
+        if (!btn || !CURRENT_DETAILS) return;
+
+        const next = btn.id === 'details-view-cal' ? 'cal' : 'list';
+        if (next === CURRENT_MODE) return;
+        CURRENT_MODE = next;
+
+        const { iso2, displayName, holidays, regionCode } = CURRENT_DETAILS;
+        renderDetails(iso2, displayName, holidays, regionCode, CURRENT_MODE);
+      });
+    }
+
+    // ---- View switching (Map: All Year vs Today) ----
     const ALL_DATA = rows.slice();
     const ALL_COLOR_CLASSES = [
       { to: 4,              color: '#d9f2e3', name: '≤ 4' },
@@ -352,7 +440,7 @@
         return;
       }
 
-      // C) TODAY: show loader, use cached fetch, then render
+      // TODAY: show loader, use cached fetch, then render
       setLoading(true);
       const today = await fetchTodaySet(YEAR);
       const todaySet = new Set(today);
