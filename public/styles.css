@@ -186,6 +186,7 @@ header {
   text-overflow: ellipsis;
 }
 .cal-day.muted { color: #9ca3af; }              /* prev/next month spill if we ever show */
+
 .cal-day.holiday {
   border-color: #2e7d32;
   background: #e8f5e9; 
@@ -198,8 +199,9 @@ header {
 
 .cal-day.past {
   color: #9ca3af;
-  border-color: #e5e7eb;
+  opacity: 0.5;
 }
+
 .cal-day.holiday.past {
   background: #f1f7f3;      /* slightly muted green for past holidays */
   border-color: #cfe6d4;
