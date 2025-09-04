@@ -40,7 +40,6 @@
   }
 
   function renderDetails(iso2, displayName, holidays, regionCode = null) {
-    detailsEl.style.display = 'block';
     const suffix = regionCode ? ` — ${regionCode}` : '';
     detailsTitle.textContent = `${displayName}${suffix} — Holidays (${YEAR})`;
 
@@ -99,9 +98,11 @@
       const code = el.getAttribute('data-code');
       el.title = `${code}: ${m[code]} regional holidays`;
       el.addEventListener('click', () => {
+        evt.preventDefault();
         const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
         const countryName = (TOTALS[iso2]?.name) || iso2;
         renderDetails(iso2, countryName, holidays, code);
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
       });
     });
   }
@@ -258,9 +259,11 @@
                 const holidays = await getCountryDetails(iso2);
                 renderDetails(iso2, display, holidays, null);
                 renderRegionList(iso2);
+                if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
               } catch {
                 renderDetails(iso2, display, [], null);
                 renderRegionList(iso2);
+                if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
               }
             }
           }

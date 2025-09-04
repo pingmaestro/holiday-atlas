@@ -14,6 +14,8 @@ body {
   background: #fff;
 }
 
+html, body, .map-wrap { overflow-anchor: none; }
+
 /* ---- Header ---- */
 header {
   background: #fff;
