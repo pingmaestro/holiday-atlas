@@ -551,7 +551,7 @@
       { from: 14, to: 19,   color: '#4d9ae8', name: '14-19' },
       { from: 20,           color: '#0b3d91', name: '20+' }
     ];
-
+    1
     async function setView(view) {
       if (view === CURRENT_VIEW) return;
       CURRENT_VIEW = view;
@@ -565,17 +565,21 @@
         return;
       }
 
-      // TODAY: show loader, use cached fetch, then render
-      setLoading(true);
-      const today = await fetchTodaySet(YEAR);
-      const todaySet = new Set(today);
+      // --- TODAY (minimal + robust) ---
+      setLoading(true, 'Loading Today…');
 
-      const iso2List = Object.keys(TOTALS);
-      const todayData = iso2List.map(iso2 => [
-        iso2.toLowerCase(),
-        todaySet.has(iso2) ? 1 : null,
-        TOTALS[iso2]?.name || iso2
-      ]);
+      // Normalize today list to lowercase once
+      const todayList = await fetchTodaySet(YEAR);
+      const todaySet = new Set((Array.isArray(todayList) ? todayList : []).map(c => String(c).trim().toLowerCase()));
+
+      // Build data straight from map geometry keys
+      const mapData = chart.series[0].mapData || [];
+      const todayData = mapData.map(p => {
+        const keyLc = String(p && (p['hc-key'] || p.hckey || p.key) || '').toLowerCase(); // e.g., 'al'
+        const iso2 = keyLc.toUpperCase(); // e.g., 'AL'
+        const hasHoliday = todaySet.has(keyLc); // case-insensitive match
+        return [keyLc, hasHoliday ? 1 : null, (TOTALS[iso2]?.name) || iso2];
+      });
 
       chart.update({
         colorAxis: {
