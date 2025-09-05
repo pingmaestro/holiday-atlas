@@ -49,20 +49,31 @@
       document.body.removeAttribute('aria-busy');
     }
   }
-
+  
   async function fetchTodaySet(year) {
     const now = Date.now();
     if (now - TODAY_CACHE.at < TODAY_TTL_MS && TODAY_CACHE.list.length) {
       return TODAY_CACHE.list;
     }
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000); // 15s cap
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
     try {
       const res = await fetch(`/api/todaySet?year=${year}`, { cache: 'no-store', signal: controller.signal });
       clearTimeout(timeout);
-      const { today = [] } = res.ok ? await res.json() : { today: [] };
-      TODAY_CACHE = { at: now, list: today };
-      return today;
+
+      const raw = res.ok ? await res.json() : { today: [] };
+      const arr = Array.isArray(raw.today) ? raw.today : [];
+
+      // 🔧 Normalize to ISO2 UPPERCASE (trim, take first 2 chars if longer)
+      const norm = Array.from(
+        new Set(
+          arr.map(c => String(c).trim().toUpperCase()).map(c => (c.length === 2 ? c : c.slice(0, 2)))
+        )
+      );
+
+      TODAY_CACHE = { at: now, list: norm };
+      return norm;
     } catch {
       clearTimeout(timeout);
       return TODAY_CACHE.list || [];
