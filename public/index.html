@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Holiday Atlas — National Holidays Map</title>
 
-    <link rel="stylesheet" href="/styles.css?v=12" />
+    <link rel="stylesheet" href="/styles.css?v=14" />
     <script src="https://code.highcharts.com/maps/highmaps.js" defer></script>
     <script src="https://code.highcharts.com/modules/exporting.js" defer></script>
     <script src="https://code.highcharts.com/modules/accessibility.js" defer></script>
-    <script src="/app.js?v=12" defer></script>
+    <script type="module" src="/app.js?v=14"></script>
   </head>
   <body>
     <header>
@@ -19,6 +19,8 @@
     <div class="view-tags" role="tablist" aria-label="Map views">
       <button class="view-tag is-active" role="tab" aria-selected="true" data-view="all">All Year</button>
       <button class="view-tag" role="tab" aria-selected="false" data-view="today">Today</button>
+      <button class="view-tag" role="tab" aria-selected="false" data-view="today">next 7 days</button>
+      <button class="view-tag" role="tab" aria-selected="false" data-view="today">next 30 days</button>
     </div>
     <div id="view-loading" class="loading-chip" hidden>Loading Today…</div>
     <div class="map-wrap">

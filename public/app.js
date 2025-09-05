@@ -1,5 +1,15 @@
 // Holiday Atlas app.js — YEAR views + List/Calendar (national-only) + Long Weekend tags/overlay
 
+import { normalizeCodeList } from '/utils/country-codes.js';
+
+function buildNameToIso2() {
+  const map = new Map();
+  for (const [iso2, rec] of Object.entries(TOTALS || {})) {
+    if (rec?.name) map.set(String(rec.name).toLowerCase(), iso2);
+  }
+  return map;
+}
+
 (async function () {
   // ---- Dynamic YEAR with optional ?year= override ----
   const yParam = Number(new URLSearchParams(location.search).get('year'));
@@ -49,7 +59,7 @@
       document.body.removeAttribute('aria-busy');
     }
   }
-  
+
   async function fetchTodaySet(year) {
     const now = Date.now();
     if (now - TODAY_CACHE.at < TODAY_TTL_MS && TODAY_CACHE.list.length) {
