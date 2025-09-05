@@ -60,6 +60,7 @@ function buildNameToIso2() {
     }
   }
 
+  // Uses normalizeCodeList to tolerate strings OR objects, names OR codes
   async function fetchTodaySet(year) {
     const now = Date.now();
     if (now - TODAY_CACHE.at < TODAY_TTL_MS && TODAY_CACHE.list.length) {
@@ -75,12 +76,8 @@ function buildNameToIso2() {
       const raw = res.ok ? await res.json() : { today: [] };
       const arr = Array.isArray(raw.today) ? raw.today : [];
 
-      // 🔧 Normalize to ISO2 UPPERCASE (trim, take first 2 chars if longer)
-      const norm = Array.from(
-        new Set(
-          arr.map(c => String(c).trim().toUpperCase()).map(c => (c.length === 2 ? c : c.slice(0, 2)))
-        )
-      );
+      // Build a name→ISO2 map from current TOTALS (handles payloads with names)
+      const norm = normalizeCodeList(arr, buildNameToIso2()); // returns ISO2 UPPER unique list
 
       TODAY_CACHE = { at: now, list: norm };
       return norm;
@@ -561,7 +558,7 @@ function buildNameToIso2() {
       { from: 14, to: 19,   color: '#4d9ae8', name: '14-19' },
       { from: 20,           color: '#0b3d91', name: '20+' }
     ];
-    1
+
     async function setView(view) {
       if (view === CURRENT_VIEW) return;
       CURRENT_VIEW = view;
@@ -578,9 +575,9 @@ function buildNameToIso2() {
       // --- TODAY (minimal + robust) ---
       setLoading(true, 'Loading Today…');
 
-      // Normalize today list to lowercase once
-      const todayList = await fetchTodaySet(YEAR);
-      const todaySet = new Set((Array.isArray(todayList) ? todayList : []).map(c => String(c).trim().toLowerCase()));
+      // Normalize today list using util; compare in lowercase
+      const todayList = await fetchTodaySet(YEAR);           // ISO2 UPPER (unique)
+      const todaySet = new Set(todayList.map(c => c.toLowerCase()));
 
       // Build data straight from map geometry keys
       const mapData = chart.series[0].mapData || [];
