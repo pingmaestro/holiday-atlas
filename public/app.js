@@ -1,6 +1,6 @@
 // Holiday Atlas app.js — YEAR views + List/Calendar (national-only) + Long Weekend tags/overlay
 
-import { normalizeCodeList } from './utils/country-codes.js';
+import { normalizeCodeList } from '/utils/country-codes.js';
 
 function buildNameToIso2() {
   const map = new Map();
