@@ -1,10 +1,14 @@
 // pages/api/todaySet.js
-// Returns: { today: ["AL","FR", ...] } — countries with a *national* holiday today (in their local TZ)
+// Returns: { today: ["AL","FR", ...] }
+//
+// Query:
+//   ?year=2025
+//   &mode=local            → each country’s local date (default; previous behavior)
+//   &mode=global&tz=Area/City  → same anchored date for every country, computed in tz (e.g., America/Toronto)
 
 import fs from 'node:fs';
 import path from 'node:path';
 
-// Minimal ISO2 → IANA timezone map (fallback to 'UTC' if missing)
 const COUNTRY_TZ = {
   // Europe
   AL: 'Europe/Tirane', AD: 'Europe/Andorra', AT: 'Europe/Vienna', BE: 'Europe/Brussels',
@@ -38,12 +42,11 @@ const COUNTRY_TZ = {
   AU: 'Australia/Sydney', NZ: 'Pacific/Auckland'
 };
 
-// Format YYYY-MM-DD for "now" in a given timeZone
-function todayInTZ(tz) {
+function dateStrInTZ(d, tz) {
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
   });
-  const parts = fmt.formatToParts(new Date());
+  const parts = fmt.formatToParts(d);
   const get = t => parts.find(p => p.type === t)?.value;
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
@@ -51,30 +54,36 @@ function todayInTZ(tz) {
 export default async function handler(req, res) {
   try {
     const year = Number(req.query.year) || new Date().getUTCFullYear();
+    const mode = String(req.query.mode || 'local').toLowerCase(); // 'local' | 'global'
+    const anchorTZ = req.query.tz ? String(req.query.tz) : null;
 
-    // Use the same totals file the front-end uses to enumerate ISO2
     const totalsPath = path.join(process.cwd(), 'public', 'data', `totals-${year}.json`);
     const totals = JSON.parse(fs.readFileSync(totalsPath, 'utf8')).totals || {};
     const iso2List = Object.keys(totals);
 
-    // Build absolute base (works locally and on Vercel)
     const proto = (req.headers['x-forwarded-proto'] || 'https');
     const host  = req.headers.host;
     const base  = `${proto}://${host}`;
 
-    // Check each country: does it have a *national* holiday today (in local TZ)?
+    // Compute the anchor date once for global mode
+    const now = new Date();
+    const anchorDateStr = (mode === 'global' && anchorTZ)
+      ? dateStrInTZ(now, anchorTZ)
+      : null;
+
     const results = await Promise.allSettled(
       iso2List.map(async (iso2) => {
         const tz = COUNTRY_TZ[iso2] || 'UTC';
-        const todayStr = todayInTZ(tz);
-        const url = `${base}/api/holidayDetails?iso2=${iso2}&year=${year}`;
-        const r = await fetch(url, { cache: 'no-store' });
+        const todayStr = (mode === 'global' && anchorDateStr)
+          ? anchorDateStr                 // same date for every country
+          : dateStrInTZ(now, tz);         // per-country local date
+
+        const r = await fetch(`${base}/api/holidayDetails?iso2=${iso2}&year=${year}`, { cache: 'no-store' });
         if (!r.ok) return null;
         const data = await r.json();
         const holidays = Array.isArray(data.holidays) ? data.holidays : [];
         const national = holidays.filter(h => h && h.global === true);
-        const isToday = national.some(h => h.date === todayStr);
-        return isToday ? iso2 : null;
+        return national.some(h => h.date === todayStr) ? iso2 : null;
       })
     );
 
@@ -83,8 +92,8 @@ export default async function handler(req, res) {
       .filter(Boolean);
 
     res.setHeader('Cache-Control', 'no-store');
-    res.status(200).json({ today });
-  } catch (e) {
+    res.status(200).json({ today, mode, tz: (mode === 'global' ? anchorTZ : 'local') });
+  } catch {
     res.status(200).json({ today: [] });
   }
 }

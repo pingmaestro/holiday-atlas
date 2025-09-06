@@ -60,7 +60,11 @@ function buildNameToIso2() {
     }
   }
 
-  // Uses normalizeCodeList to tolerate strings OR objects, names OR codes
+  // Detect user's IANA zone once
+  const USER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+// Choose how "Today" works: 'global' (anchored to USER_TZ) or 'local'
+  const TODAY_MODE = 'global'; // ← set to 'local' if you want per-country local dates
+
   async function fetchTodaySet(year) {
     const now = Date.now();
     if (now - TODAY_CACHE.at < TODAY_TTL_MS && TODAY_CACHE.list.length) {
@@ -70,15 +74,22 @@ function buildNameToIso2() {
     const timeout = setTimeout(() => controller.abort(), 15000);
 
     try {
-      const res = await fetch(`/api/todaySet?year=${year}`, { cache: 'no-store', signal: controller.signal });
+      const params = new URLSearchParams({ year: String(year) });
+      if (TODAY_MODE === 'global') {
+        params.set('mode', 'global');
+        params.set('tz', USER_TZ);
+      } else {
+        params.set('mode', 'local'); // explicit
+      }
+
+      const res = await fetch(`/api/todaySet?${params.toString()}`, { cache: 'no-store', signal: controller.signal });
       clearTimeout(timeout);
 
       const raw = res.ok ? await res.json() : { today: [] };
       const arr = Array.isArray(raw.today) ? raw.today : [];
 
-      // Build a name→ISO2 map from current TOTALS (handles payloads with names)
-      const norm = normalizeCodeList(arr, buildNameToIso2()); // returns ISO2 UPPER unique list
-
+      // Normalize to ISO2 UPPER (safe)
+      const norm = Array.from(new Set(arr.map(c => String(c).trim().toUpperCase().slice(0,2))));
       TODAY_CACHE = { at: now, list: norm };
       return norm;
     } catch {
