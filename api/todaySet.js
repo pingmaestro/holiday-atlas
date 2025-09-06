@@ -1,11 +1,10 @@
-// pages/api/todaySet.js  (Next.js Pages Router)
-// Returns: { today: ["AL","FR",... ] }
+// pages/api/todaySet.js
+// Returns: { today: ["AL","FR", ...] } — countries with a *national* holiday today (in their local TZ)
 
 import fs from 'node:fs';
 import path from 'node:path';
 
-// Minimal ISO2 → IANA timezone map (covering many; fallback to UTC).
-// Add/adjust freely — unknown codes default to 'UTC'.
+// Minimal ISO2 → IANA timezone map (fallback to 'UTC' if missing)
 const COUNTRY_TZ = {
   // Europe
   AL: 'Europe/Tirane', AD: 'Europe/Andorra', AT: 'Europe/Vienna', BE: 'Europe/Brussels',
@@ -39,7 +38,7 @@ const COUNTRY_TZ = {
   AU: 'Australia/Sydney', NZ: 'Pacific/Auckland'
 };
 
-// Format today's date as YYYY-MM-DD in a specific timeZone
+// Format YYYY-MM-DD for "now" in a given timeZone
 function todayInTZ(tz) {
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
@@ -53,18 +52,17 @@ export default async function handler(req, res) {
   try {
     const year = Number(req.query.year) || new Date().getUTCFullYear();
 
-    // Load totals to know which ISO2 codes we support
+    // Use the same totals file the front-end uses to enumerate ISO2
     const totalsPath = path.join(process.cwd(), 'public', 'data', `totals-${year}.json`);
     const totals = JSON.parse(fs.readFileSync(totalsPath, 'utf8')).totals || {};
     const iso2List = Object.keys(totals);
 
-    // Base URL to call your own API from the server (works on Vercel)
-    // If you have issues locally, you can use an absolute URL or read direct data instead.
-    const base =
-      process.env.NEXT_PUBLIC_BASE_URL ||
-      process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}` ||
-      '';
+    // Build absolute base (works locally and on Vercel)
+    const proto = (req.headers['x-forwarded-proto'] || 'https');
+    const host  = req.headers.host;
+    const base  = `${proto}://${host}`;
 
+    // Check each country: does it have a *national* holiday today (in local TZ)?
     const results = await Promise.allSettled(
       iso2List.map(async (iso2) => {
         const tz = COUNTRY_TZ[iso2] || 'UTC';
@@ -86,8 +84,7 @@ export default async function handler(req, res) {
 
     res.setHeader('Cache-Control', 'no-store');
     res.status(200).json({ today });
-  } catch (err) {
-    // Fail-safe: return empty set so the client still renders
+  } catch (e) {
     res.status(200).json({ today: [] });
   }
 }
