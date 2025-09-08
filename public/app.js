@@ -621,3 +621,177 @@ function buildNameToIso2() {
     if (el) el.innerHTML = '<div class="note" style="padding:16px">Failed to load map.</div>';
   }
 })();
+
+// ==== Next N Days (client-only) =============================================
+
+// --- utils (UTC-safe dates)
+const haPad = (n) => String(n).padStart(2, "0");
+const haIsoUTC = (d) => `${d.getUTCFullYear()}-${haPad(d.getUTCMonth()+1)}-${haPad(d.getUTCDate())}`;
+const haTodayUTC = () => {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+};
+const haWeekdayUTC = (iso) => {
+  const [y,m,d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m-1, d)).toLocaleDateString(undefined, { weekday: "long" });
+};
+
+// --- pickers tolerant of different holiday shapes
+function haPickDate(h, yearFallback) {
+  if (!h) return null;
+  if (typeof h.date === "string") return h.date;                 // "YYYY-MM-DD"
+  if (h.isoDate) return h.isoDate;
+  if (h.on) return h.on;
+  if (h.d) return h.d;
+  if (h.date && typeof h.date === "object" && typeof h.date.iso === "string") return h.date.iso;
+  if (Number.isInteger(h.month) && Number.isInteger(h.day)) {
+    const y = Number(h.year) || yearFallback || new Date().getFullYear();
+    return `${y}-${haPad(h.month)}-${haPad(h.day)}`;
+  }
+  return null;
+}
+const haPickName = (h) => h?.name || h?.title || h?.localName || "Holiday";
+
+// --- derive year from your existing title "Holidays (2025)"
+function haCurrentYear() {
+  const t = document.querySelector("#details-title")?.textContent || "";
+  const m = t.match(/\b(19|20)\d{2}\b/);
+  return m ? Number(m[0]) : new Date().getFullYear();
+}
+
+// --- load totals for the current year (prefer already-loaded window.TOTALS)
+async function haLoadTotals(year) {
+  if (window.TOTALS && typeof window.TOTALS === "object") {
+    const totals = window.TOTALS;
+    return Array.isArray(totals)
+      ? totals
+      : Object.entries(totals).map(([iso2, rec]) => ({ iso2, ...rec }));
+  }
+  const res = await fetch(`/data/totals-${year}.json`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Missing /data/totals-${year}.json`);
+  const data = await res.json();
+  return Array.isArray(data)
+    ? data
+    : Object.entries(data).map(([iso2, rec]) => ({ iso2, ...rec }));
+}
+
+// --- compute window union + by-date (group by date, count)
+function haComputeWindow(entries, startISO, days, year) {
+  const start = new Date(startISO + "T00:00:00Z");
+  const end   = new Date(start);
+  end.setUTCDate(end.getUTCDate() + (days - 1));
+
+  const inWindow = (iso) => {
+    const [y,m,d] = iso.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m-1, d));
+    return dt >= start && dt <= end;
+  };
+
+  const iso2Set = new Set();
+  const byDate = Object.create(null);
+
+  for (const rec of entries) {
+    const iso2    = rec.iso2 || rec.code || rec.countryCode || rec.id;
+    const country = rec.country || rec.countryName || rec.name || iso2;
+    const list    = rec.holidays || rec.days || rec.entries || rec.items || rec.list || [];
+    for (const h of list) {
+      const ds = haPickDate(h, year);
+      if (!ds || !inWindow(ds)) continue;
+      // If your dataset contains regional flags and you want national-only, keep this:
+      // if (h.type === "Regional" || h.regional === true) continue;
+
+      (byDate[ds] ||= []).push({ iso2, country, name: haPickName(h) });
+      iso2Set.add(iso2);
+    }
+  }
+
+  // sort by date ascending
+  const sortedByDate = Object.fromEntries(Object.keys(byDate).sort().map(k => [k, byDate[k]]));
+  return { iso2: Array.from(iso2Set).sort(), byDate: sortedByDate,
+           start: startISO, end: haIsoUTC(end) };
+}
+
+// --- minimal details renderer (non-destructive; replace if you have your own)
+function haRenderDetailsByDate(byDate, titleNote) {
+  const elBody = document.querySelector("#details-body");
+  if (!elBody) return;
+  elBody.innerHTML = ""; // clear
+
+  const wrap = document.createElement("div");
+  for (const [date, items] of Object.entries(byDate)) {
+    const sec = document.createElement("section");
+    sec.className = "details-section";
+    const h = document.createElement("h4");
+    h.textContent = `${date} (${haWeekdayUTC(date)}) — ${items.length} holiday${items.length>1?"s":""}`;
+    sec.appendChild(h);
+
+    const ul = document.createElement("ul");
+    items.forEach(x => {
+      const li = document.createElement("li");
+      li.textContent = `${x.country || x.iso2}: ${x.name}`;
+      ul.appendChild(li);
+    });
+    sec.appendChild(ul);
+    wrap.appendChild(sec);
+  }
+  elBody.appendChild(wrap);
+
+  const elTitle = document.querySelector("#details-title");
+  if (elTitle && titleNote) elTitle.textContent = `Holidays (${haCurrentYear()}) — ${titleNote}`;
+}
+
+// --- paint map using your existing function if available
+function haPaintMap(iso2List) {
+  // If your app exposes a painter, call it:
+  if (typeof window.haColorCountries === "function") {
+    window.haColorCountries(iso2List);
+    return;
+  }
+  // Else, if you have a function you use for "Today", call that here instead.
+  // (Leaving empty won’t break anything; you’ll still get the details list.)
+}
+
+// --- loading chip helpers (optional, matches your #view-loading)
+function haSetLoading(msg) {
+  const chip = document.querySelector("#view-loading");
+  if (!chip) return;
+  if (msg) { chip.textContent = msg; chip.hidden = false; }
+  else { chip.hidden = true; }
+}
+
+// --- main “next N days” entry
+async function haShowNext(days) {
+  try {
+    const YEAR = haCurrentYear();
+    haSetLoading(`Loading next ${days} days…`);
+    const startISO = haIsoUTC(haTodayUTC());
+    const totals = await haLoadTotals(YEAR);
+    const { iso2, byDate, start, end } = haComputeWindow(totals, startISO, days, YEAR);
+
+    haPaintMap(iso2);                           // color countries (if you expose a painter)
+    haRenderDetailsByDate(byDate, `Next ${days} days (${start} → ${end})`);
+  } catch (e) {
+    console.error(e);
+    haRenderDetailsByDate({}, `Next ${days} days — error`);
+  } finally {
+    haSetLoading(null);
+  }
+}
+
+// --- wire the two buttons without touching your existing Today handler
+function haSetActiveView(viewName, btnEl) {
+  document.querySelectorAll(".view-tag").forEach(b => b.classList.remove("is-active"));
+  if (btnEl) btnEl.classList.add("is-active");
+}
+
+document.querySelector('[data-view="next7"]')?.addEventListener("click", (e) => {
+  e.preventDefault(); e.stopPropagation();
+  haSetActiveView("next7", e.currentTarget);
+  haShowNext(7);
+});
+document.querySelector('[data-view="next30"]')?.addEventListener("click", (e) => {
+  e.preventDefault(); e.stopPropagation();
+  haSetActiveView("next30", e.currentTarget);
+  haShowNext(30);
+});
+
