@@ -6,10 +6,13 @@
     <title>Holiday Atlas — National Holidays Map</title>
 
     <link rel="stylesheet" href="/styles.css?v=14" />
+    <link rel="stylesheet" href="/busiest-days.css?v=1" />
+
     <script src="https://code.highcharts.com/maps/highmaps.js" defer></script>
     <script src="https://code.highcharts.com/modules/exporting.js" defer></script>
     <script src="https://code.highcharts.com/modules/accessibility.js" defer></script>
     <script type="module" src="/app.js?v=14"></script>
+    <script src="/busiest-days.js?v=1" defer></script>
   </head>
   <body>
     <header>
@@ -19,10 +22,13 @@
     <div class="view-tags" role="tablist" aria-label="Map views">
       <button class="view-tag is-active" role="tab" aria-selected="true" data-view="all">All Year</button>
       <button class="view-tag" role="tab" aria-selected="false" data-view="today">Today</button>
-      <button class="view-tag" role="tab" aria-selected="false" data-view="today">next 7 days</button>
-      <button class="view-tag" role="tab" aria-selected="false" data-view="today">next 30 days</button>
+      <button class="view-tag" role="tab" aria-selected="false" data-view="next7">next 7 days</button>
+      <button class="view-tag" role="tab" aria-selected="false" data-view="next30">next 30 days</button>
+      <button id="btn-busiest-days" class="view-tag" role="tab" aria-selected="false" data-view="busiest">Busiest days</button>
     </div>
+
     <div id="view-loading" class="loading-chip" hidden>Loading Today…</div>
+
     <div class="map-wrap">
       <div id="wpr-map" role="img" aria-label="Choropleth map of national holidays"></div>
       <article id="details" class="card">
@@ -38,5 +44,7 @@
     </div>
 
     <div id="region-list-anchor"></div>
+
+    <div id="busiest-days-root" hidden aria-hidden="true"></div>
   </body>
 </html>

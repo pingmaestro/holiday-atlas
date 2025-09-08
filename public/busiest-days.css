@@ -1,0 +1,122 @@
+/* --- Visibility toggles --- */
+#busiest-days-root[aria-hidden="false"] { display: block; }
+#busiest-days-root[hidden] { display: none; }
+
+/* --- Overlay & dialog --- */
+.bdst-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+}
+
+.bdst-dialog {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+}
+
+.bdst-panel {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  width: min(1100px, 92vw);
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Header --- */
+.bdst-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.bdst-title {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.bdst-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bdst-btn {
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+
+.bdst-btn:hover { background: #f9fafb; }
+.bdst-btn:active { background: #f3f4f6; }
+.bdst-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* --- Body & scroll --- */
+.bdst-body { padding: 12px; }
+.bdst-scroll {
+  max-height: 65vh;
+  overflow: auto;
+}
+
+/* --- Table --- */
+.bdst-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.bdst-table th,
+.bdst-table td {
+  border: 1px solid #e5e7eb;
+  padding: 8px;
+  vertical-align: top;
+}
+
+.bdst-table thead th {
+  background: #f9fafb;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.bdst-center { text-align: center; }
+.bdst-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+}
+
+.bdst-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #f3f4f6;
+  margin: 2px 4px 2px 0;
+  white-space: nowrap;
+}
+
+.bdst-list { margin: 0; padding-left: 18px; }
+
+/* --- Status text --- */
+.bdst-muted { color: #6b7280; }
+.bdst-error { color: #b91c1c; }
+
+/* --- Small screens --- */
+@media (max-width: 520px) {
+  .bdst-title { font-size: 15px; }
+  .bdst-table { font-size: 13px; }
+  .bdst-badge { font-size: 12px; }
+}
