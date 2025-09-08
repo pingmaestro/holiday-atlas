@@ -1,19 +1,20 @@
-// /public/busiest-days.js
+// /public/busiest-days.js — ultra-simple: GROUP BY date + COUNT (from window.TOTALS)
 (function () {
+  // ---- tiny helpers
   const $ = (sel) => document.querySelector(sel);
   const clear = (node) => { while (node.firstChild) node.removeChild(node.firstChild); };
   const el = (tag, attrs = {}, children = []) => {
-    const node = document.createElement(tag);
+    const n = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs)) {
-      if (k === "class") node.className = v;
-      else if (k === "text") node.textContent = v;
-      else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
-      else if (v !== undefined && v !== null) node.setAttribute(k, v);
+      if (k === "class") n.className = v;
+      else if (k === "text") n.textContent = v;
+      else if (k.startsWith("on") && typeof v === "function") n.addEventListener(k.slice(2), v);
+      else if (v !== undefined && v !== null) n.setAttribute(k, v);
     }
-    (Array.isArray(children) ? children : [children]).forEach(c =>
-      node.appendChild(typeof c === "string" ? document.createTextNode(c) : c)
+    (Array.isArray(children) ? children : [children]).forEach((c) =>
+      n.appendChild(typeof c === "string" ? document.createTextNode(c) : c)
     );
-    return node;
+    return n;
   };
   const weekdayUTC = (dateStr) => {
     const [y, m, d] = dateStr.split("-").map(Number);
@@ -30,110 +31,70 @@
     return out.join("\n");
   };
 
+  // ---- pickers that tolerate different shapes
+  const pad = (n) => String(n).padStart(2, "0");
+  function pickDate(h, yearFallback) {
+    if (!h) return null;
+    if (typeof h.date === "string") return h.date;               // "2025-01-01"
+    if (h.isoDate) return h.isoDate;                              // "2025-01-01"
+    if (h.on) return h.on;
+    if (h.d) return h.d;
+    if (h.date && typeof h.date === "object" && typeof h.date.iso === "string") return h.date.iso;
+    if (Number.isInteger(h.month) && Number.isInteger(h.day)) {
+      const y = Number(h.year) || yearFallback || new Date().getFullYear();
+      return `${y}-${pad(h.month)}-${pad(h.day)}`;
+    }
+    return null;
+  }
+  const pickName = (h) => h?.name || h?.title || h?.localName || "Holiday";
+
   function getYear() {
-    const title = $("#details-title")?.textContent || "";
-    const m = title.match(/\b(19|20)\d{2}\b/);
+    const txt = $("#details-title")?.textContent || "";
+    const m = txt.match(/\b(19|20)\d{2}\b/);
     return m ? Number(m[0]) : new Date().getFullYear();
   }
 
-  async function fetchJson(url) {
-    const r = await fetch(url, { cache: "no-store" });
-    if (!r.ok) throw new Error(`${url} ${r.status}`);
-    return r.json();
-  }
+  // ---- CORE: group by date + count (from window.TOTALS)
+  function computeTop20FromTOTALS(YEAR) {
+    const totals = (typeof window !== "undefined" && window.TOTALS) || null;
+    if (!totals || typeof totals !== "object") {
+      throw new Error("TOTALS not loaded on window. Ensure your page defines window.TOTALS before this script.");
+    }
 
-  // --- Loaders for multiple possible shapes ---
-  function normalizeTotals(entries, year) {
-    const byDate = {};
-    const pad = (n) => String(n).padStart(2, "0");
-    const pickDate = (h) => {
-      if (!h) return null;
-      if (typeof h.date === "string") return h.date;
-      if (h.isoDate) return h.isoDate;
-      if (h.on) return h.on;
-      if (h.d) return h.d;
-      if (h.date && typeof h.date === "object" && typeof h.date.iso === "string") return h.date.iso;
-      if (Number.isInteger(h.month) && Number.isInteger(h.day)) return `${year}-${pad(h.month)}-${pad(h.day)}`;
-      return null;
-    };
-    const pickName = (h) => h?.name || h?.title || h?.localName || "Holiday";
+    // byDate: date -> { count, items: [{iso2,country,name}] }
+    const byDate = Object.create(null);
+
+    // totals can be an object { CA:{name,holidays:[...]}, ... }
+    // or an array; normalize to entries
+    const entries = Array.isArray(totals)
+      ? totals
+      : Object.entries(totals).map(([iso2, rec]) => ({ iso2, ...rec }));
 
     for (const rec of entries) {
       const iso2 = rec.iso2 || rec.code || rec.countryCode || rec.id;
       const country = rec.country || rec.countryName || rec.name || iso2;
       const list = rec.holidays || rec.days || rec.entries || rec.items || rec.list || [];
+
       for (const h of list) {
-        const date = pickDate(h);
+        const date = pickDate(h, YEAR);
         if (!date) continue;
-        (byDate[date] ||= []).push({ iso2, country, name: pickName(h) });
+
+        // If your dataset contains regional flags and you want national-only, keep this:
+        // if (h.type === "Regional" || h.regional === true) continue;
+
+        const item = { iso2, country, name: pickName(h) };
+        (byDate[date] ||= { date, count: 0, items: [] });
+        byDate[date].count += 1;
+        byDate[date].items.push(item);
       }
     }
-    return byDate;
-  }
 
-  async function loadFromTotals(year) {
-    const data = await fetchJson(`/data/totals-${year}.json`);
-    const entries = Array.isArray(data) ? data : Object.entries(data).map(([iso2, rec]) => ({ iso2, ...rec }));
-    return normalizeTotals(entries, year);
-  }
-
-  async function loadByDate(year) {
-    // Shape: { "YYYY-MM-DD": [ {iso2,country,name}, ... ] }
-    return await fetchJson(`/data/holidays-by-date-${year}.json`);
-  }
-
-  async function loadFromCountries(year) {
-    // Optional: requires /data/countries/index.json listing iso2 codes
-    const idx = await fetchJson(`/data/countries/index.json`).catch(() => null);
-    if (!idx) return {};
-    const byDate = {};
-    const pad = (n) => String(n).padStart(2, "0");
-    const pickDate = (h) => {
-      if (!h) return null;
-      if (typeof h.date === "string") return h.date;
-      if (h.isoDate) return h.isoDate;
-      if (h.on) return h.on;
-      if (h.d) return h.d;
-      if (h.date && typeof h.date === "object" && typeof h.date.iso === "string") return h.date.iso;
-      if (Number.isInteger(h.month) && Number.isInteger(h.day)) return `${year}-${pad(h.month)}-${pad(h.day)}`;
-      return null;
-    };
-    const pickName = (h) => h?.name || h?.title || h?.localName || "Holiday";
-    for (const iso2 of idx.iso2 || []) {
-      const arr = await fetchJson(`/data/countries/${iso2}/${year}.json`).catch(() => null);
-      if (!arr) continue;
-      for (const h of arr) {
-        const date = pickDate(h);
-        if (!date) continue;
-        (byDate[date] ||= []).push({ iso2, country: h.country || h.countryName || iso2, name: pickName(h) });
-      }
-    }
-    return byDate;
-  }
-
-  function loadFromGlobalTOTALS(year) {
-    // If you already attach a TOTALS object on window, use it.
-    const global = (window && window.TOTALS) || null;
-    if (!global || typeof global !== "object") return null;
-    const entries = Object.entries(global).map(([iso2, rec]) => ({ iso2, ...rec }));
-    return normalizeTotals(entries, year);
-  }
-
-  async function loadByAnySource(year) {
-    try { return await loadFromTotals(year); } catch (e) { /* console.debug(e); */ }
-    try { return await loadByDate(year); }   catch (e) { /* console.debug(e); */ }
-    try { return await loadFromCountries(year); } catch (e) { /* console.debug(e); */ }
-    const fromGlobal = loadFromGlobalTOTALS(year);
-    if (fromGlobal) return fromGlobal;
-    throw new Error("No data found under /data for this year.");
-  }
-
-  function toTop20(byDate) {
-    const rows = Object.entries(byDate).map(([date, items]) => ({ date, count: items.length, items }));
+    const rows = Object.values(byDate);
     rows.sort((a, b) => b.count - a.count || a.date.localeCompare(b.date));
     return rows.slice(0, 20);
   }
 
+  // ---- rendering (modal stays the same)
   function renderTable(rows) {
     const thead = el("thead", {}, [
       el("tr", {}, [
@@ -169,7 +130,7 @@
   }
 
   function openModal(year, evt) {
-    if (evt) { evt.preventDefault(); evt.stopPropagation(); } // <-- block parent tab handlers
+    if (evt) { evt.preventDefault(); evt.stopPropagation(); }
 
     const root = document.getElementById("busiest-days-root");
     if (!root) return;
@@ -178,8 +139,8 @@
     clear(root);
 
     const overlay = el("div", { class: "bdst-overlay", onclick: () => closeModal() });
-    const dialog = el("div", { class: "bdst-dialog" });
-    const panel  = el("div", { class: "bdst-panel", role: "dialog", "aria-modal": "true", "aria-label": "Busiest days" });
+    const dialog  = el("div", { class: "bdst-dialog" });
+    const panel   = el("div", { class: "bdst-panel", role: "dialog", "aria-modal": "true", "aria-label": "Busiest days" });
 
     const title   = el("div", { class: "bdst-title" }, `Top 20 busiest holiday dates — ${year}`);
     const dlBtn   = el("a", { class: "bdst-btn", id: "bdst-dl", href: "javascript:void(0)" }, "Download CSV");
@@ -187,8 +148,8 @@
     const closeBtn= el("button", { class: "bdst-btn", onclick: () => closeModal() }, "Close");
     const header  = el("div", { class: "bdst-header" }, [title, el("div", { class: "bdst-actions" }, [dlBtn, closeBtn])]);
 
-    const body   = el("div", { class: "bdst-body" });
-    const scroll = el("div", { class: "bdst-scroll" }, el("p", { class: "bdst-muted", id: "bdst-status", text: "Loading…" }));
+    const body    = el("div", { class: "bdst-body" });
+    const scroll  = el("div", { class: "bdst-scroll" }, el("p", { class: "bdst-muted", id: "bdst-status", text: "Loading…" }));
     body.appendChild(scroll);
 
     panel.appendChild(header);
@@ -197,26 +158,30 @@
     root.appendChild(overlay);
     root.appendChild(dialog);
 
-    loadByAnySource(year)
-      .then((byDate) => {
-        clear(scroll);
-        const rows = toTop20(byDate);
-        if (!rows.length) {
-          scroll.appendChild(el("p", { class: "bdst-muted", text: `No data found for ${year}.` }));
-          return;
-        }
-        scroll.appendChild(renderTable(rows));
-        const csv = toCSV(rows);
-        const blob = new Blob([csv], { type: "text/csv" });
-        const url  = URL.createObjectURL(blob);
-        dlBtn.href = url;
-        dlBtn.setAttribute("download", `top-days-${year}.csv`);
-        dlBtn.style.display = "";
-      })
-      .catch((err) => {
-        clear(scroll);
-        scroll.appendChild(el("p", { class: "bdst-error", text: String(err?.message || err) }));
-      });
+    // Compute locally (GROUP BY date + COUNT)
+    let rows = [];
+    try {
+      rows = computeTop20FromTOTALS(year);
+    } catch (err) {
+      clear(scroll);
+      scroll.appendChild(el("p", { class: "bdst-error", text: String(err?.message || err) }));
+      return;
+    }
+
+    clear(scroll);
+    if (!rows.length) {
+      scroll.appendChild(el("p", { class: "bdst-muted", text: `No data found for ${year}.` }));
+      return;
+    }
+    scroll.appendChild(renderTable(rows));
+
+    // CSV
+    const csv  = toCSV(rows);
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url  = URL.createObjectURL(blob);
+    dlBtn.href = url;
+    dlBtn.setAttribute("download", `top-days-${year}.csv`);
+    dlBtn.style.display = "";
   }
 
   function closeModal() {
@@ -227,9 +192,10 @@
     clear(root);
   }
 
+  // Wire the button (and block any parent tab handler)
   window.addEventListener("DOMContentLoaded", () => {
     const btn = document.getElementById("btn-busiest-days");
     if (!btn) return;
-    btn.addEventListener("click", (e) => openModal(getYear(), e));
+    btn.addEventListener("click", (e) => openModal(getYear(), e), { capture: true });
   });
 })();
