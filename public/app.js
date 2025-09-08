@@ -402,7 +402,7 @@ function buildNameToIso2() {
       mapNavigation: {
         enabled: false,
         enableButtons: false,
-        enableMouseWheelZoom: false,
+        enableMouseWheelZoom: true,
         enableDoubleClickZoomTo: false,
         enableDoubleClickZoom: false,
         enableTouchZoom: false
@@ -522,6 +522,33 @@ function buildNameToIso2() {
         }
       }]
     });
+    
+    // Expose a painter so Next 7/30 can color the map like "Today"
+    window.haColorCountries = function (iso2UpperList) {
+      const lcSet = new Set(iso2UpperList.map(c => String(c).toLowerCase()));
+      const mapData = chart.series[0].mapData || [];
+      const data = mapData.map(p => {
+        const keyLc = String(p && (p['hc-key'] || p.hckey || p.key) || '').toLowerCase();
+        const iso2 = keyLc.toUpperCase();
+        const has = lcSet.has(keyLc);
+        return [keyLc, has ? 1 : null, (TOTALS[iso2]?.name) || iso2];
+      });
+
+      chart.update({
+        colorAxis: {
+          dataClassColor: 'category',
+          dataClasses: [
+            { to: 0, color: '#d9d9d9', name: 'No holiday in window' },
+            { from: 1, color: '#0b3d91', name: 'Has ≥1 holiday' }
+          ],
+          nullColor: '#d9d9d9'
+        }
+      }, false);
+
+      chart.series[0].setData(data, false);
+      chart.redraw();
+      CURRENT_VIEW = 'today';
+    };
 
     // ---- View tags (All Year / Today) ----
     const tagsEl = document.querySelector('.view-tags');
@@ -622,115 +649,43 @@ function buildNameToIso2() {
   }
 })();
 
-/* =========================
-   Holiday Atlas — Next N Days (client-only)
-   Drop-in: paste at END of public/app.js
-   ========================= */
+/* ===== Next N days powered by todaySet (no hardcoded JSON) =============== */
 (() => {
-  // ------- tiny helpers -------
   const $ = (s) => document.querySelector(s);
-  const pad = (n) => String(n).padStart(2, "0");
+  const pad = (n) => String(n).padStart(2, '0');
   const isoUTC = (d) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
-  const todayUTC = () => {
-    const now = new Date();
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  };
   const weekdayUTC = (iso) => {
-    const [y,m,d] = iso.split("-").map(Number);
-    return new Date(Date.UTC(y, m-1, d)).toLocaleDateString(undefined, { weekday: "long" });
+    const [y,m,d] = iso.split('-').map(Number);
+    return new Date(Date.UTC(y, m-1, d)).toLocaleDateString(undefined, { weekday: 'long' });
   };
-  const pickName = (h) => h?.name || h?.title || h?.localName || "Holiday";
-  const pickDate = (h, year) => {
-    if (!h) return null;
-    if (typeof h.date === "string") return h.date;
-    if (h.isoDate) return h.isoDate;
-    if (h.on) return h.on;
-    if (h.d) return h.d;
-    if (h.date && typeof h.date === "object" && typeof h.date.iso === "string") return h.date.iso;
-    if (Number.isInteger(h.month) && Number.isInteger(h.day)) {
-      const y = Number(h.year) || year || new Date().getFullYear();
-      return `${y}-${pad(h.month)}-${pad(h.day)}`;
-    }
-    return null;
-  };
-  const currentYear = () => {
-    const t = $("#details-title")?.textContent || "";
-    const m = t.match(/\b(19|20)\d{2}\b/);
-    return m ? Number(m[0]) : new Date().getFullYear();
-  };
-  const setLoading = (msg) => {
-    const chip = $("#view-loading");
+
+  function todayISO() {
+    const n = new Date();
+    return isoUTC(new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate())));
+  }
+
+  function setLoading(msg) {
+    const chip = $('#view-loading');
     if (!chip) return;
-    if (msg) { chip.textContent = msg; chip.hidden = false; }
-    else chip.hidden = true;
-  };
-
-  // ------- load totals (prefer in-memory) -------
-  async function loadTotals(year) {
-    if (window.TOTALS && typeof window.TOTALS === "object") {
-      console.log("[nextN] using window.TOTALS");
-      const t = window.TOTALS;
-      return Array.isArray(t) ? t : Object.entries(t).map(([iso2, rec]) => ({ iso2, ...rec }));
-    }
-    const url = `/data/totals-${year}.json`;
-    console.log("[nextN] fetching", url);
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error(`Missing ${url}`);
-    const data = await res.json();
-    return Array.isArray(data) ? data : Object.entries(data).map(([iso2, rec]) => ({ iso2, ...rec }));
+    if (msg) { chip.textContent = msg; chip.hidden = false; document.body.setAttribute('aria-busy', 'true'); }
+    else { chip.hidden = true; document.body.removeAttribute('aria-busy'); }
   }
 
-  // ------- compute window -------
-  function computeWindow(entries, startISO, days, year) {
-    const start = new Date(startISO + "T00:00:00Z");
-    const end = new Date(start); end.setUTCDate(end.getUTCDate() + (days - 1));
-
-    const inWindow = (iso) => {
-      const [y,m,d] = iso.split("-").map(Number);
-      const dt = new Date(Date.UTC(y, m-1, d));
-      return dt >= start && dt <= end;
-    };
-
-    const iso2Set = new Set();
-    const byDate = Object.create(null);
-
-    let holidayCount = 0;
-    for (const rec of entries) {
-      const iso2 = rec.iso2 || rec.code || rec.countryCode || rec.id;
-      const country = rec.country || rec.countryName || rec.name || iso2;
-      const list = rec.holidays || rec.days || rec.entries || rec.items || rec.list || [];
-      for (const h of list) {
-        const ds = pickDate(h, year);
-        if (!ds || !inWindow(ds)) continue;
-        // Uncomment if your source mixes regionals and you want national-only:
-        // if (h.type === "Regional" || h.regional === true) continue;
-        (byDate[ds] ||= []).push({ iso2, country, name: pickName(h) });
-        iso2Set.add(iso2);
-        holidayCount++;
-      }
-    }
-
-    const sortedByDate = Object.fromEntries(Object.keys(byDate).sort().map(k => [k, byDate[k]]));
-    console.log(`[nextN] window ${startISO} → ${isoUTC(end)} | countries=${iso2Set.size} | holidays=${holidayCount}`);
-    return { iso2: Array.from(iso2Set).sort(), byDate: sortedByDate, start: startISO, end: isoUTC(end) };
-  }
-
-  // ------- render details panel (non-destructive) -------
   function renderDetailsByDate(byDate, titleNote) {
-    const body = $("#details-body");
+    const body = $('#details-body');
     if (!body) return;
-    body.innerHTML = "";
-    const wrap = document.createElement("div");
+    body.innerHTML = '';
+    const wrap = document.createElement('div');
     for (const [date, items] of Object.entries(byDate)) {
-      const sec = document.createElement("section");
-      sec.className = "details-section";
-      const h = document.createElement("h4");
-      h.textContent = `${date} (${weekdayUTC(date)}) — ${items.length} holiday${items.length>1?"s":""}`;
+      const sec = document.createElement('section');
+      sec.className = 'details-section';
+      const h = document.createElement('h4');
+      h.textContent = `${date} (${weekdayUTC(date)}) — ${items.length} holiday${items.length>1?'s':''}`;
       sec.appendChild(h);
-      const ul = document.createElement("ul");
+      const ul = document.createElement('ul');
       items.forEach(x => {
-        const li = document.createElement("li");
-        li.textContent = `${x.country || x.iso2}: ${x.name}`;
+        const li = document.createElement('li');
+        li.textContent = `${x.iso2}: ${x.name}`;
         ul.appendChild(li);
       });
       sec.appendChild(ul);
@@ -738,49 +693,64 @@ function buildNameToIso2() {
     }
     body.appendChild(wrap);
 
-    const title = $("#details-title");
-    if (title && titleNote) title.textContent = `Holidays (${currentYear()}) — ${titleNote}`;
+    const title = $('#details-title');
+    if (title && titleNote) title.textContent = `Holidays (${new Date().getFullYear()}) — ${titleNote}`;
   }
 
-  // ------- color map (hook to your painter if available) -------
-  function paintMap(iso2List) {
-    if (typeof window.haColorCountries === "function") {
-      window.haColorCountries(iso2List);
-    } else if (typeof window.colorCountries === "function") {
-      window.colorCountries(iso2List);
-    } else {
-      console.log("[nextN] skipping map paint (no painter exposed)");
-    }
+  async function fetchDay(dateISO) {
+    const r = await fetch(`/api/todaySet?date=${dateISO}`, { cache: 'no-store' });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j?.error || `todaySet failed for ${dateISO}`);
+    // j.today = ["AL","FR",...], j.items = [{iso2,name}] for that date
+    return j;
   }
 
-  // ------- main -------
   async function showNext(days) {
+    setLoading(`Loading next ${days} days…`);
     try {
-      const YEAR = currentYear();
-      setLoading(`Loading next ${days} days…`);
-      const startISO = isoUTC(todayUTC());
-      const totals = await loadTotals(YEAR);
-      console.log("[nextN] totals entries:", totals.length);
-      const { iso2, byDate, start, end } = computeWindow(totals, startISO, days, YEAR);
-      paintMap(iso2);
-      renderDetailsByDate(byDate, `Next ${days} days (${start} → ${end})`);
-    } catch (err) {
-      console.error("[nextN] error", err);
+      const start = todayISO();
+      const [y,m,d] = start.split('-').map(Number);
+      const startDt = new Date(Date.UTC(y, m-1, d));
+      const dates = Array.from({ length: days }, (_, i) => {
+        const dt = new Date(startDt); dt.setUTCDate(dt.getUTCDate() + i);
+        return isoUTC(dt);
+      });
+
+      const results = await Promise.all(dates.map(fetchDay));
+
+      // union countries + group items by date
+      const iso2Set = new Set();
+      const byDate = {};
+      results.forEach(r => {
+        (r.today || []).forEach(c => iso2Set.add(c));
+        if (r.items?.length) (byDate[r.date] ||= []).push(...r.items);
+      });
+
+      // sort by date asc
+      const sortedByDate = Object.fromEntries(Object.keys(byDate).sort().map(k => [k, byDate[k]]));
+
+      if (typeof window.haColorCountries === 'function') {
+        window.haColorCountries(Array.from(iso2Set).sort());
+      }
+      const end = dates[dates.length - 1];
+      renderDetailsByDate(sortedByDate, `Next ${days} days (${start} → ${end})`);
+    } catch (e) {
+      console.error('[nextN] error', e);
       renderDetailsByDate({}, `Next ${days} days — error`);
     } finally {
       setLoading(null);
     }
   }
 
-  // ------- wire buttons (capture, stop propagation to avoid 'today' handler) -------
+  // Wire buttons; stop parent tab handler from hijacking the click
   function setActive(btn) {
-    document.querySelectorAll(".view-tag").forEach(b => b.classList.remove("is-active"));
-    btn?.classList.add("is-active");
+    document.querySelectorAll('.view-tag').forEach(b => b.classList.remove('is-active'));
+    btn?.classList.add('is-active');
   }
 
   const btn7 = document.querySelector('[data-view="next7"]');
   if (btn7) {
-    btn7.addEventListener("click", (e) => {
+    btn7.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
       setActive(e.currentTarget);
       showNext(7);
@@ -789,7 +759,7 @@ function buildNameToIso2() {
 
   const btn30 = document.querySelector('[data-view="next30"]');
   if (btn30) {
-    btn30.addEventListener("click", (e) => {
+    btn30.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
       setActive(e.currentTarget);
       showNext(30);
