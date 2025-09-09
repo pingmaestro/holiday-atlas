@@ -55,6 +55,26 @@ header {
   border-color: #0b3d91;
 }
 
+.highcharts-zoom-in,
+.highcharts-zoom-out {
+  cursor: pointer;
+}
+
+.highcharts-zoom-in rect,
+.highcharts-zoom-out rect {
+  fill: #fff;          /* background */
+  stroke: #ccc;        /* border */
+  rx: 6; ry: 6;        /* rounded corners */
+}
+
+.highcharts-zoom-in text,
+.highcharts-zoom-out text {
+  fill: #333;          /* text color */
+  font-size: 14px;
+  font-weight: bold;
+}
+
+
 /* ---- Contained Map Area ---- */
 .map-wrap {
   max-width: 1500px;     /* ← contain the map & legend width */
