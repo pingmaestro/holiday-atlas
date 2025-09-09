@@ -38,9 +38,7 @@ function buildNameToIso2() {
   let CURRENT_VIEW = 'all';            // 'all' or 'today'
   let CURRENT_MODE = 'list';           // 'list' or 'cal'
   let CURRENT_DETAILS = null;          // { iso2, displayName, holidays, regionCode }
-
-  // NEW: remember the currently selected country (ISO2 UPPER / hc-key)
-  let SELECTED_KEY = null;             // NEW
+  let SELECTED_KEY = null;             // ISO2 upper (e.g., 'FR') for persistent selection
 
   // ---- Elements ----
   const detailsTitle = document.getElementById('details-title');
@@ -402,18 +400,17 @@ function buildNameToIso2() {
       },
 
       mapNavigation: {
-        enabled: true,                 // CHANGED: ensure buttons render
+        enabled: true,
         enableButtons: true,
         enableMouseWheelZoom: true,
         enableDoubleClickZoomTo: false,
         enableDoubleClickZoom: false,
         enableTouchZoom: false,
-
         buttonOptions: {
           align: 'right',
           verticalAlign: 'top',
           x: -8,
-          y: 56,                       // under burger
+          y: 56, // stacked under burger
           theme: {
             fill: '#fff',
             stroke: '#cfd7e6',
@@ -426,8 +423,8 @@ function buildNameToIso2() {
           }
         },
         buttons: {
-          zoomIn:  { /* default y: 0 */ },
-          zoomOut: { y: 44 }           // stack
+          zoomIn:  { /* y: 0 */ },
+          zoomOut: { y: 44 } // stack below
         }
       },
 
@@ -496,13 +493,13 @@ function buildNameToIso2() {
         joinBy: ['hc-key','hc-key'],
         allAreas: true,
 
-        // Borders & selection
+        // Borders & selection (select differs from hover; overlay also paints)
         borderColor: '#cfd7e6',
         borderWidth: 0.20,
         allowPointSelect: true,
         states: {
           hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.2, borderColor: '#000', brightness: 0.15 },
-          select: { color: '#ffc54d', borderColor: '#000', borderWidth: 0.4, brightness: 0 } // CHANGED: make select distinct
+          select: { color: '#ffc54d', borderColor: '#000', borderWidth: 0.4, brightness: 0 }
         },
 
         dataLabels: { enabled: false },
@@ -515,22 +512,26 @@ function buildNameToIso2() {
               c.tooltip.refresh(this);
               this.setState('hover');
             },
-            mouseOut: function () {                 // CHANGED: don't clear if selected
+            mouseOut: function () {
               const c = this.series.chart;
               c.tooltip.hide(0);
               if (!this.selected) this.setState();
             },
             click: async function () {
-              // Highlight + render table (no zoom)
               const hcKey = (this.options['hc-key'] || this['hc-key'] || '').toUpperCase();
               const iso2  = hcKey;
               const display = (TOTALS[iso2]?.name) || this.name || iso2;
 
-              // Select only one
+              // Remember selection
+              SELECTED_KEY = hcKey;
+
+              // Native select (for a11y) – single select
               this.series.points.forEach(p => { if (p !== this && p.selected) p.select(false, false); });
               this.select(true, false);
 
-              SELECTED_KEY = hcKey;                // NEW: remember selection
+              // Paint overlay
+              selectionSeries.setData([[hcKey.toLowerCase(), 1]], false);
+              chart.redraw();
 
               try {
                 const holidays = await getCountryDetails(iso2);
@@ -548,20 +549,41 @@ function buildNameToIso2() {
       }]
     });
 
-    // NEW: re-apply a remembered selection after any data update/redraw
+    // === Selection overlay series (paints the clicked country on top) ===
+    const selectionSeries = chart.addSeries({
+      type: 'map',
+      name: 'SelectionOverlay',
+      mapData: chart.series[0].mapData,
+      joinBy: ['hc-key','hc-key'],
+      data: [],
+      colorAxis: false,
+      color: '#ffc54d',
+      borderColor: '#000',
+      borderWidth: 0.8,
+      enableMouseTracking: false,
+      showInLegend: false,
+      zIndex: 7,
+      states: { hover: { enabled: false }, select: { enabled: false } }
+    }, false);
+
+    // Re-apply selection overlay (and native select) after any data update/redraw
     function reselectIfNeeded() {
-      if (!SELECTED_KEY) return;
+      if (!SELECTED_KEY) {
+        selectionSeries.setData([], false);
+        return;
+      }
+      selectionSeries.setData([[SELECTED_KEY.toLowerCase(), 1]], false);
+
       const s = chart.series?.[0];
-      if (!s || !s.points?.length) return;
-
-      const pt = s.points.find(p => String(
-        (p.options && (p.options['hc-key'] || p.options.hckey || p.options.key)) ||
-        p['hc-key'] || p.key || ''
-      ).toUpperCase() === SELECTED_KEY);
-
-      if (pt) {
-        s.points.forEach(p => { if (p !== pt && p.selected) p.select(false, false); });
-        pt.select(true, false);
+      if (s?.points?.length) {
+        const pt = s.points.find(p => String(
+          (p.options && (p.options['hc-key'] || p.options.hckey || p.options.key)) ||
+          p['hc-key'] || p.key || ''
+        ).toUpperCase() === SELECTED_KEY);
+        if (pt) {
+          s.points.forEach(p => { if (p !== pt && p.selected) p.select(false, false); });
+          pt.select(true, false);
+        }
       }
     }
 
@@ -589,7 +611,7 @@ function buildNameToIso2() {
 
       chart.series[0].setData(data, false);
       chart.redraw();
-      reselectIfNeeded();                           // NEW: keep selection after paint
+      reselectIfNeeded();
       CURRENT_VIEW = 'today';
     };
 
@@ -650,7 +672,7 @@ function buildNameToIso2() {
         }, false);
         chart.series[0].setData(ALL_DATA, false);
         chart.redraw();
-        reselectIfNeeded();                         // NEW
+        reselectIfNeeded();
         return;
       }
 
@@ -683,7 +705,7 @@ function buildNameToIso2() {
 
       chart.series[0].setData(todayData, false);
       chart.redraw();
-      reselectIfNeeded();                           // NEW
+      reselectIfNeeded();
       setLoading(false);
     }
 
