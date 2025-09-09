@@ -394,7 +394,7 @@ function buildNameToIso2() {
       exporting: {
         enabled: true,
         buttons: {
-          contextButton: { align: 'right', verticalAlign: 'top', x: -8, y: 8, theme: { r: 0 } }
+          contextButton: { align: 'left', verticalAlign: 'top', x: -8, y: 8, theme: { r: 0 } }
         }
       },
 
