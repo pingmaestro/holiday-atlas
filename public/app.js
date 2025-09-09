@@ -35,18 +35,30 @@ function buildNameToIso2() {
   let REGIONS = {};  // { FR:{ 'FR-75': n, ... }, ... }
   const detailsCache = new Map();      // key: "FR-2025" -> holidays[]
   const longWeekendCache = new Map();  // key: "FR-2025" -> { list, dateSet }
-  let CURRENT_VIEW = 'all';            // 'all' or 'today'
-  let CURRENT_MODE = 'list';           // 'list' or 'cal'
+  let CURRENT_VIEW = 'all';            // 'all' | 'today' | 'range'
+  let CURRENT_MODE = 'list';           // 'list' or 'cal' (only used in All Year)
   let CURRENT_DETAILS = null;          // { iso2, displayName, holidays, regionCode }
 
-  // Selection (All Year only). We *paint* a single point with a fixed color.
+  // All Year single-country highlight (via per-point color override)
   let SELECTED_KEY = null;     // 'CA', 'FR', ...
-  let SELECTED_POINT = null;   // cached Highcharts point ref for quick unpaint
+  let SELECTED_POINT = null;   // cached Highcharts point ref
+
+  // Tooltip sources for non-All-Year views
+  // TODAY_ITEMS_MAP: ISO2 -> [holiday names today]
+  // RANGE_ITEMS_MAP: ISO2 -> [holiday names in the window]
+  let TODAY_ITEMS_MAP = new Map();
+  let RANGE_ITEMS_MAP = new Map();
 
   // ---- Elements ----
   const detailsTitle = document.getElementById('details-title');
   const detailsBody  = document.getElementById('details-body');
   const loadingEl    = document.getElementById('view-loading');
+  const detailsTabsEl = document.querySelector('.details-views'); // the List/Calendar box
+
+  const showDetailsTabs = (show) => {
+    if (!detailsTabsEl) return;
+    detailsTabsEl.hidden = !show;
+  };
 
   // ---- Loader + cache helpers (Today view) ----
   let TODAY_CACHE = { at: 0, list: [] };
@@ -96,6 +108,31 @@ function buildNameToIso2() {
     }
   }
 
+  // For “today” tooltip details (names), reuse the /api/todaySet?date=YYYY-MM-DD endpoint
+  async function fetchTodayItemsFor(dateISO) {
+    try {
+      const r = await fetch(`/api/todaySet?date=${dateISO}`, { cache: 'no-store' });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || 'todaySet failed');
+      // j.items = [{ iso2, name }]
+      const m = new Map();
+      (j.items || []).forEach(x => {
+        const key = String(x.iso2 || '').toUpperCase().slice(0,2);
+        if (!m.has(key)) m.set(key, []);
+        m.get(key).push(x.name);
+      });
+      return m;
+    } catch {
+      return new Map();
+    }
+  }
+
+  function todayISO_UTC() {
+    const n = new Date();
+    const y = n.getUTCFullYear(), m = String(n.getUTCMonth()+1).padStart(2,'0'), d = String(n.getUTCDate()).padStart(2,'0');
+    return `${y}-${m}-${d}`;
+  }
+
   async function getCountryDetails(iso2) {
     const key = `${iso2}-${YEAR}`;
     if (detailsCache.has(key)) return detailsCache.get(key);
@@ -116,6 +153,7 @@ function buildNameToIso2() {
   async function getLongWeekends(iso2, year) {
     const key = `${iso2}-${year}`;
     if (longWeekendCache.has(key)) return longWeekendCache.get(key);
+
     try {
       const url = `https://date.nager.at/api/v3/LongWeekend/${year}/${iso2}`;
       const res = await fetch(url, { cache: 'no-store' });
@@ -256,9 +294,10 @@ function buildNameToIso2() {
     const suffix = regionCode ? ` — ${regionCode}` : '';
     detailsTitle.textContent = `${displayName}${suffix} — Holidays (${YEAR})`;
 
+    // Tabs are All-Year only. Respect hidden state.
     const btnList = document.getElementById('details-view-list');
     const btnCal  = document.getElementById('details-view-cal');
-    if (btnList && btnCal) {
+    if (btnList && btnCal && !detailsTabsEl.hidden) {
       btnList.classList.toggle('is-active', mode === 'list');
       btnList.setAttribute('aria-selected', mode === 'list' ? 'true' : 'false');
       btnCal.classList.toggle('is-active', mode === 'cal');
@@ -439,15 +478,27 @@ function buildNameToIso2() {
         animation: false,
         hideDelay: 0,
         formatter: function () {
-          const name = this.point.name || this.point.options?.label || (this.point.options && this.point.options['hc-key'] ? this.point.options['hc-key'].toUpperCase() : '');
+          const key = (this.point.options && (this.point.options['hc-key'] || this.point.options.hckey || this.point.options.key)) ||
+                      this.point['hc-key'] || this.point.key || '';
+          const iso2 = String(key).toUpperCase();
+          const name = this.point.name || this.point.options?.label || iso2;
           const val = (typeof this.point.value === 'number') ? this.point.value : null;
 
           if (CURRENT_VIEW === 'today') {
-            return val === 1
-              ? `<strong>${esc(name)}</strong><br/><span class="pill">National holiday today</span>`
+            const list = TODAY_ITEMS_MAP.get(iso2) || [];
+            return list.length
+              ? `<strong>${esc(name)}</strong><br/><span class="pill">${esc(list.join(', '))}</span>`
               : `<strong>${esc(name)}</strong><br/><span class="pill">No holiday today</span>`;
           }
 
+          if (CURRENT_VIEW === 'range') {
+            const list = RANGE_ITEMS_MAP.get(iso2) || [];
+            return list.length
+              ? `<strong>${esc(name)}</strong><br/><span class="pill">${esc(list.join(', '))}</span>`
+              : `<strong>${esc(name)}</strong><br/><span class="pill">No holiday in window</span>`;
+          }
+
+          // All Year
           return val == null
             ? `<strong>${esc(name)}</strong><br/><span class="pill">No data</span>`
             : `<strong>${esc(name)}</strong><br/><span class="pill">${val} national holidays</span>`;
@@ -482,7 +533,7 @@ function buildNameToIso2() {
 
         states: {
           hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.15, borderColor: '#000', brightness: 0.10 },
-          select: { borderWidth: 0.15, borderColor: '#000', brightness: 0 } // keep width the same
+          select: { borderWidth: 0.15, borderColor: '#000', brightness: 0 }
         },
 
         dataLabels: { enabled: false },
@@ -541,25 +592,20 @@ function buildNameToIso2() {
 
     // --- Selection helpers (no overlay; pure point.color override) ---
     function applySelection(point, keyUpper) {
-      // clear previous
       if (SELECTED_POINT && SELECTED_POINT.update) {
-        // Setting color: null returns control to colorAxis
-        SELECTED_POINT.update({ color: null }, false);
+        SELECTED_POINT.update({ color: null }, false); // back to colorAxis
       }
-      // set new
       point.update({ color: '#ffc54d' }, false);
       chart.redraw();
       SELECTED_POINT = point;
       SELECTED_KEY = keyUpper;
     }
-
     function clearSelectionColor() {
       if (SELECTED_POINT && SELECTED_POINT.update) {
         SELECTED_POINT.update({ color: null }, false);
         chart.redraw();
       }
     }
-
     function reapplySelectionIfAllYear() {
       if (CURRENT_VIEW !== 'all' || !SELECTED_KEY) return;
       const s = chart.series?.[0];
@@ -568,17 +614,23 @@ function buildNameToIso2() {
         (p.options && (p.options['hc-key'] || p.options.hckey || p.options.key)) ||
         p['hc-key'] || p.key || ''
       ).toUpperCase() === SELECTED_KEY);
-      if (pt) {
-        applySelection(pt, SELECTED_KEY);
-      } else {
-        SELECTED_POINT = null;
-      }
+      if (pt) applySelection(pt, SELECTED_KEY);
+      else SELECTED_POINT = null;
     }
 
     // Expose a painter so Next 7/30 can color the map like "Today"
-    window.haColorCountries = function (iso2UpperList) {
+    // NOW accepts second argument: itemsFlat [{iso2, name}] to build tooltips
+    window.haColorCountries = function (iso2UpperList, itemsFlat = []) {
       // Clear any All-Year highlight when painting Next-N
       clearSelectionColor();
+
+      // Build tooltip map for the range
+      RANGE_ITEMS_MAP = new Map();
+      (itemsFlat || []).forEach(x => {
+        const k = String(x.iso2 || '').toUpperCase().slice(0,2);
+        if (!RANGE_ITEMS_MAP.has(k)) RANGE_ITEMS_MAP.set(k, []);
+        RANGE_ITEMS_MAP.get(k).push(x.name);
+      });
 
       const lcSet = new Set(iso2UpperList.map(c => String(c).toLowerCase()));
       const mapData = chart.series[0].mapData || [];
@@ -594,7 +646,7 @@ function buildNameToIso2() {
           dataClassColor: 'category',
           dataClasses: [
             { to: 0, color: '#d9d9d9', name: 'No holiday in window' },
-            { from: 1, color: '#649af8d2', name: 'Has ≥1 holiday' }
+            { from: 1, color: '#0b3d91', name: 'Has ≥1 holiday' }
           ],
           nullColor: '#d9d9d9'
         }
@@ -602,7 +654,11 @@ function buildNameToIso2() {
 
       chart.series[0].setData(data, false);
       chart.redraw();
+
+      // IMPORTANT: mark this as a RANGE view (not 'today'),
+      // so clicking the Today tag will actually refresh.
       CURRENT_VIEW = 'range';
+      showDetailsTabs(false); // hide List/Calendar in ranges
     };
 
     // ---- View tags (All Year / Today) ----
@@ -662,18 +718,24 @@ function buildNameToIso2() {
         }, false);
         chart.series[0].setData(ALL_DATA, false);
         chart.redraw();
-        // Repaint previously selected country (if any)
-        reapplySelectionIfAllYear();
+        showDetailsTabs(true);        // show List/Calendar only in All Year
+        reapplySelectionIfAllYear();  // repaint yellow selection if any
         return;
       }
 
-      // --- TODAY (and relatives) ---
-      // Clear visual selection when leaving All Year
+      // --- TODAY ---
+      // Clear All-Year selection visuals
       clearSelectionColor();
+      showDetailsTabs(false); // hide List/Calendar in Today
 
       setLoading(true, 'Loading Today…');
 
-      const todayList = await fetchTodaySet(YEAR); // ISO2 UPPER (unique)
+      // Build tooltip map with real holiday names for today
+      const todayISO = todayISO_UTC();
+      TODAY_ITEMS_MAP = await fetchTodayItemsFor(todayISO);
+
+      // Paint countries that have holiday today
+      const todayList = await fetchTodaySet(YEAR); // unique ISO2 upper
       const todaySet = new Set(todayList.map(c => c.toLowerCase()));
 
       const mapData = chart.series[0].mapData || [];
@@ -776,18 +838,24 @@ function buildNameToIso2() {
 
       const results = await Promise.all(dates.map(fetchDay));
 
+      // union countries + group items by date
       const iso2Set = new Set();
       const byDate = {};
+      const itemsFlat = []; // collect for tooltips in range
       results.forEach(r => {
         (r.today || []).forEach(c => iso2Set.add(c));
-        if (r.items?.length) (byDate[r.date] ||= []).push(...r.items);
+        if (r.items?.length) {
+          (byDate[r.date] ||= []).push(...r.items);
+          itemsFlat.push(...r.items);
+        }
       });
 
+      // sort by date asc
       const sortedByDate = Object.fromEntries(Object.keys(byDate).sort().map(k => [k, byDate[k]]));
 
-      // Paint and (intentionally) clear any All-Year selection
       if (typeof window.haColorCountries === 'function') {
-        window.haColorCountries(Array.from(iso2Set).sort());
+        // pass both the country set and the flat list of items for tooltips
+        window.haColorCountries(Array.from(iso2Set).sort(), itemsFlat);
       }
       const end = dates[dates.length - 1];
       renderDetailsByDate(sortedByDate, `Next ${days} days (${start} → ${end})`);
