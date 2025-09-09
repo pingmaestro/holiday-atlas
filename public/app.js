@@ -38,7 +38,9 @@ function buildNameToIso2() {
   let CURRENT_VIEW = 'all';            // 'all' or 'today'
   let CURRENT_MODE = 'list';           // 'list' or 'cal'
   let CURRENT_DETAILS = null;          // { iso2, displayName, holidays, regionCode }
-  let SELECTED_KEY = null;             // ISO2 UPPER (e.g., 'CA') for persistent select
+
+  // Persistent selection (All Year only)
+  let SELECTED_KEY = null;             // ISO2 UPPER (e.g., 'CA')
 
   // ---- Elements ----
   const detailsTitle = document.getElementById('details-title');
@@ -63,8 +65,7 @@ function buildNameToIso2() {
 
   // Detect user's IANA zone once
   const USER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  // Choose how "Today" works: 'global' (anchored to USER_TZ) or 'local'
-  const TODAY_MODE = 'global';
+  const TODAY_MODE = 'global'; // or 'local'
 
   async function fetchTodaySet(year) {
     const now = Date.now();
@@ -145,7 +146,7 @@ function buildNameToIso2() {
     }
   }
 
-  // ---- Calendar renderer (12-month year grid) ----
+  // ---- Calendar renderer ----
   function renderCalendarHTML(year, holidays, longWeekendDates) {
     const holidayMap = new Map();
     holidays.forEach(h => {
@@ -156,7 +157,6 @@ function buildNameToIso2() {
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
     const monthNames = Array.from({ length: 12 }, (_, i) =>
       new Date(year, i, 1).toLocaleString(undefined, { month: 'long' })
     );
@@ -212,7 +212,7 @@ function buildNameToIso2() {
     return `<div class="year-cal">${months}</div>`;
   }
 
-  // ---- Lightweight calendar tooltip (custom) ----
+  // ---- Lightweight calendar tooltip ----
   let calTipEl = null;
   function ensureCalTip() {
     if (calTipEl) return calTipEl;
@@ -235,7 +235,6 @@ function buildNameToIso2() {
   }
   function hideCalTip() { if (calTipEl) calTipEl.hidden = true; }
 
-  // Delegate events on the details body (works across re-renders)
   detailsBody.addEventListener('mouseover', (e) => {
     const day = e.target.closest('.cal-day');
     if (!day || !detailsBody.contains(day)) return;
@@ -483,13 +482,14 @@ function buildNameToIso2() {
         joinBy: ['hc-key','hc-key'],
         allAreas: true,
 
-        // Keep base borders minimal; draw crisp borders in a separate mapline series
-        borderColor: '#000',           // very thin, barely visible
-        borderWidth: 0.15,             // keep thinner than before
-        allowPointSelect: true,
+        // Base borders kept thin; selection will be drawn by overlay (same width)
+        borderColor: '#000',
+        borderWidth: 0.15,
+        allowPointSelect: false, // we don't use native select color; overlay handles it
+
         states: {
-          hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.2, borderColor: '#000', brightness: 0.10 },
-          select: { color: '#ffc54d', borderColor: '#000', borderWidth: 0.6, brightness: 0 }
+          hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.15, borderColor: '#000', brightness: 0.10 },
+          select: { color: undefined, borderWidth: 0.15, borderColor: '#000', brightness: 0 } // keep width same if ever used
         },
 
         dataLabels: { enabled: false },
@@ -505,17 +505,17 @@ function buildNameToIso2() {
             mouseOut: function () {
               const c = this.series.chart;
               c.tooltip.hide(0);
-              if (!this.selected) this.setState();
+              this.setState(); // hover off
             },
             click: async function () {
               const hcKey = (this.options['hc-key'] || this['hc-key'] || '').toUpperCase();
               const iso2  = hcKey;
               const display = (TOTALS[iso2]?.name) || this.name || iso2;
 
-              // Single select
-              this.series.points.forEach(p => { if (p !== this && p.selected) p.select(false, false); });
-              this.select(true, false);
-              SELECTED_KEY = hcKey;
+              if (CURRENT_VIEW === 'all') {
+                // Set persistent selection (All Year only)
+                setSelection(hcKey);
+              }
 
               try {
                 const holidays = await getCountryDetails(iso2);
@@ -533,36 +533,64 @@ function buildNameToIso2() {
       }]
     });
 
-    // === Thin, non-interactive world borders (for crisp outlines) ===
+    // === Thin, non-interactive world borders (crisp outlines) ===
     const borderLines = Highcharts.geojson(topology, 'mapline');
     chart.addSeries({
       type: 'mapline',
       data: borderLines,
-      color: '#cfd7e6',            // subtle gray; change to '#000' if you want black
-      lineWidth: 0.6,              // thin borders
+      color: '#cfd7e6',            // tweak if you want darker/lighter
+      lineWidth: 0.6,
       enableMouseTracking: false,
       showInLegend: false,
       zIndex: 6
     }, false);
+
+    // === Selection overlay series (paints clicked country on top; no thicker border) ===
+    const selectionSeries = chart.addSeries({
+      type: 'map',
+      name: 'SelectionOverlay',
+      mapData: chart.series[0].mapData,
+      joinBy: ['hc-key','hc-key'],
+      data: [],
+      colorAxis: false,
+      color: '#ffc54d',            // yellow fill
+      borderColor: '#000',
+      borderWidth: 0.15,           // SAME as base so width doesn't change
+      enableMouseTracking: false,  // visuals only
+      showInLegend: false,
+      zIndex: 7,
+      states: { hover: { enabled: false }, select: { enabled: false } }
+    }, false);
+
+    // Make absolutely sure overlay never steals clicks
+    if (selectionSeries.group && selectionSeries.group.css) {
+      selectionSeries.group.css({ 'pointer-events': 'none' });
+    }
+
     chart.redraw();
 
-    // Re-apply native selection after any data update/redraw
+    // --- Selection helpers ---
+    function setSelection(hcKeyUpper) {
+      SELECTED_KEY = hcKeyUpper;
+      selectionSeries.setData([[hcKeyUpper.toLowerCase(), 1]], false);
+      chart.redraw();
+    }
+    function clearSelection() {
+      SELECTED_KEY = null;
+      selectionSeries.setData([], false);
+      chart.redraw();
+    }
     function reselectIfNeeded() {
-      if (!SELECTED_KEY) return;
-      const s = chart.series?.[0];
-      if (!s?.points?.length) return;
-      const pt = s.points.find(p => String(
-        (p.options && (p.options['hc-key'] || p.options.hckey || p.options.key)) ||
-        p['hc-key'] || p.key || ''
-      ).toUpperCase() === SELECTED_KEY);
-      if (pt) {
-        s.points.forEach(p => { if (p !== pt && p.selected) p.select(false, false); });
-        pt.select(true, false);
-      }
+      if (CURRENT_VIEW !== 'all' || !SELECTED_KEY) return; // only persist in All Year
+      selectionSeries.setData([[SELECTED_KEY.toLowerCase(), 1]], false);
+      chart.redraw();
     }
 
     // Expose a painter so Next 7/30 can color the map like "Today"
     window.haColorCountries = function (iso2UpperList) {
+      // Clear any All-Year selection when painting Next-N
+      clearSelection();
+
       const lcSet = new Set(iso2UpperList.map(c => String(c).toLowerCase()));
       const mapData = chart.series[0].mapData || [];
       const data = mapData.map(p => {
@@ -585,7 +613,6 @@ function buildNameToIso2() {
 
       chart.series[0].setData(data, false);
       chart.redraw();
-      reselectIfNeeded();
       CURRENT_VIEW = 'today';
     };
 
@@ -641,6 +668,7 @@ function buildNameToIso2() {
       CURRENT_VIEW = view;
 
       if (view === 'all') {
+        // Restore original classes and data, keep any All-Year selection visible
         chart.update({
           colorAxis: { dataClasses: ALL_COLOR_CLASSES, dataClassColor: 'category', nullColor: '#d9d9d9' }
         }, false);
@@ -650,10 +678,13 @@ function buildNameToIso2() {
         return;
       }
 
-      // --- TODAY ---
+      // --- TODAY (and relatives) ---
+      // Clear selection when leaving All Year
+      clearSelection();
+
       setLoading(true, 'Loading Today…');
 
-      const todayList = await fetchTodaySet(YEAR); // ISO2 UPPER
+      const todayList = await fetchTodaySet(YEAR); // ISO2 UPPER (unique)
       const todaySet = new Set(todayList.map(c => c.toLowerCase()));
 
       const mapData = chart.series[0].mapData || [];
@@ -677,7 +708,6 @@ function buildNameToIso2() {
 
       chart.series[0].setData(todayData, false);
       chart.redraw();
-      reselectIfNeeded();
       setLoading(false);
     }
 
@@ -740,6 +770,7 @@ function buildNameToIso2() {
     const r = await fetch(`/api/todaySet?date=${dateISO}`, { cache: 'no-store' });
     const j = await r.json();
     if (!r.ok) throw new Error(j?.error || `todaySet failed for ${dateISO}`);
+    // j.today = ["AL","FR",...], j.items = [{iso2,name}] for that date
     return j;
   }
 
@@ -765,6 +796,7 @@ function buildNameToIso2() {
 
       const sortedByDate = Object.fromEntries(Object.keys(byDate).sort().map(k => [k, byDate[k]]));
 
+      // Paint and (intentionally) clear any All-Year selection
       if (typeof window.haColorCountries === 'function') {
         window.haColorCountries(Array.from(iso2Set).sort());
       }
@@ -778,6 +810,7 @@ function buildNameToIso2() {
     }
   }
 
+  // Wire buttons; stop parent tab handler from hijacking the click
   function setActive(btn) {
     document.querySelectorAll('.view-tag').forEach(b => b.classList.remove('is-active'));
     btn?.classList.add('is-active');
