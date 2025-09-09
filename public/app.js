@@ -594,7 +594,7 @@ function buildNameToIso2() {
           dataClassColor: 'category',
           dataClasses: [
             { to: 0, color: '#d9d9d9', name: 'No holiday in window' },
-            { from: 1, color: '#0b3d91', name: 'Has ≥1 holiday' }
+            { from: 1, color: '#649af8d2', name: 'Has ≥1 holiday' }
           ],
           nullColor: '#d9d9d9'
         }
@@ -602,7 +602,7 @@ function buildNameToIso2() {
 
       chart.series[0].setData(data, false);
       chart.redraw();
-      CURRENT_VIEW = 'today';
+      CURRENT_VIEW = 'range';
     };
 
     // ---- View tags (All Year / Today) ----
