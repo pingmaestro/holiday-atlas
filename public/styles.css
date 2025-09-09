@@ -55,6 +55,40 @@ header {
   border-color: #0b3d91;
 }
 
+#ui-top-right {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 1000; /* above map */
+}
+
+#menuBtn {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.1);
+  background: #fff;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+#zoomStack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#zoomStack button {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.1);
+  background: #fff;
+  font-size: 20px;
+  cursor: pointer;
+}
+
 
 /* ---- Contained Map Area ---- */
 .map-wrap {
