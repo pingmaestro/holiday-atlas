@@ -402,9 +402,9 @@ function buildNameToIso2() {
       mapNavigation: {
         enabled: false,
         enableButtons: true,
-        enableMouseWheelZoom: false,
-        enableDoubleClickZoomTo: true,
-        enableDoubleClickZoom: true,
+        enableMouseWheelZoom: true,
+        enableDoubleClickZoomTo: false,
+        enableDoubleClickZoom: false,
         enableTouchZoom: false
       },
 
