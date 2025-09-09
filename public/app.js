@@ -38,7 +38,7 @@ function buildNameToIso2() {
   let CURRENT_VIEW = 'all';            // 'all' or 'today'
   let CURRENT_MODE = 'list';           // 'list' or 'cal'
   let CURRENT_DETAILS = null;          // { iso2, displayName, holidays, regionCode }
-  let SELECTED_KEY = null;             // ISO2 upper (e.g., 'FR') for persistent selection
+  let SELECTED_KEY = null;             // ISO2 UPPER (e.g., 'CA') for persistent select
 
   // ---- Elements ----
   const detailsTitle = document.getElementById('details-title');
@@ -64,7 +64,7 @@ function buildNameToIso2() {
   // Detect user's IANA zone once
   const USER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   // Choose how "Today" works: 'global' (anchored to USER_TZ) or 'local'
-  const TODAY_MODE = 'global'; // ← set to 'local' if you want per-country local dates
+  const TODAY_MODE = 'global';
 
   async function fetchTodaySet(year) {
     const now = Date.now();
@@ -80,7 +80,7 @@ function buildNameToIso2() {
         params.set('mode', 'global');
         params.set('tz', USER_TZ);
       } else {
-        params.set('mode', 'local'); // explicit
+        params.set('mode', 'local');
       }
 
       const res = await fetch(`/api/todaySet?${params.toString()}`, { cache: 'no-store', signal: controller.signal });
@@ -89,7 +89,6 @@ function buildNameToIso2() {
       const raw = res.ok ? await res.json() : { today: [] };
       const arr = Array.isArray(raw.today) ? raw.today : [];
 
-      // Normalize to ISO2 UPPER (safe)
       const norm = Array.from(new Set(arr.map(c => String(c).trim().toUpperCase().slice(0,2))));
       TODAY_CACHE = { at: now, list: norm };
       return norm;
@@ -116,7 +115,6 @@ function buildNameToIso2() {
   }
 
   // ---- Long Weekend fetcher (Nager.Date) ----
-  // API: https://date.nager.at/api/v3/LongWeekend/{year}/{countryCode}
   async function getLongWeekends(iso2, year) {
     const key = `${iso2}-${year}`;
     if (longWeekendCache.has(key)) return longWeekendCache.get(key);
@@ -125,8 +123,7 @@ function buildNameToIso2() {
       const url = `https://date.nager.at/api/v3/LongWeekend/${year}/${iso2}`;
       const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
-      const list = await res.json(); // [{ startDate, endDate, dayCount, needBridgeDay }, ...]
-      // Build a Set of yyyy-mm-dd strings inside any LW range
+      const list = await res.json();
       const dateSet = new Set();
       for (const lw of list) {
         const sd = parseLocalISODate(lw.startDate);
@@ -149,8 +146,7 @@ function buildNameToIso2() {
   }
 
   // ---- Calendar renderer (12-month year grid) ----
-  function renderCalendarHTML(year, holidays, longWeekendDates /* Set<string> yyyy-mm-dd */) {
-    // Map yyyy-mm-dd -> [holiday names]
+  function renderCalendarHTML(year, holidays, longWeekendDates) {
     const holidayMap = new Map();
     holidays.forEach(h => {
       const d = h.date;
@@ -158,14 +154,13 @@ function buildNameToIso2() {
       holidayMap.get(d).push(h.name || h.localName || 'Holiday');
     });
 
-    // normalize "today" to local midnight
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     const monthNames = Array.from({ length: 12 }, (_, i) =>
       new Date(year, i, 1).toLocaleString(undefined, { month: 'long' })
     );
-    const dow = ['S','M','T','W','T','F','S']; // Sunday-start
+    const dow = ['S','M','T','W','T','F','S'];
 
     const months = monthNames.map((mn, mIdx) => {
       const first = new Date(year, mIdx, 1);
@@ -189,7 +184,6 @@ function buildNameToIso2() {
         const names = isHoliday ? holidayMap.get(key) : [];
         const longDate = dLocal.toLocaleDateString(undefined, { weekday:'short', year:'numeric', month:'long', day:'numeric' });
 
-        // Tooltip text
         let tip = longDate;
         if (names.length) tip += ` — ${names.join(', ')}`;
         if (inLW) tip += names.length ? ' • Long Weekend' : ' — Long Weekend';
@@ -259,18 +253,14 @@ function buildNameToIso2() {
   async function renderDetails(iso2, displayName, holidays, regionCode = null, mode = CURRENT_MODE) {
     CURRENT_DETAILS = { iso2, displayName, holidays, regionCode };
 
-    // Only national holidays
     const all = Array.isArray(holidays) ? holidays : [];
     const natList = all.filter(h => h && h.global === true);
 
-    // Fetch long weekends for the country-year
     const { dateSet: lwDates } = await getLongWeekends(iso2, YEAR);
 
-    // Title (keeping your format here)
     const suffix = regionCode ? ` — ${regionCode}` : '';
     detailsTitle.textContent = `${displayName}${suffix} — Holidays (${YEAR})`;
 
-    // Toggle the tab UI
     const btnList = document.getElementById('details-view-list');
     const btnCal  = document.getElementById('details-view-cal');
     if (btnList && btnCal) {
@@ -292,7 +282,6 @@ function buildNameToIso2() {
       return;
     }
 
-    // LIST mode: date + holiday name (+ Long Week-End Alert pill when inside LW)
     const rows = natList
       .slice()
       .sort((a, b) => parseLocalISODate(a.date) - parseLocalISODate(b.date))
@@ -399,6 +388,7 @@ function buildNameToIso2() {
         }
       },
 
+      // Zoom buttons stacked under the burger
       mapNavigation: {
         enabled: true,
         enableButtons: true,
@@ -410,7 +400,7 @@ function buildNameToIso2() {
           align: 'right',
           verticalAlign: 'top',
           x: -8,
-          y: 56, // stacked under burger
+          y: 56,
           theme: {
             fill: '#fff',
             stroke: '#cfd7e6',
@@ -423,8 +413,8 @@ function buildNameToIso2() {
           }
         },
         buttons: {
-          zoomIn:  { /* y: 0 */ },
-          zoomOut: { y: 44 } // stack below
+          zoomIn:  {},
+          zoomOut: { y: 44 }
         }
       },
 
@@ -493,13 +483,13 @@ function buildNameToIso2() {
         joinBy: ['hc-key','hc-key'],
         allAreas: true,
 
-        // Borders & selection (select differs from hover; overlay also paints)
-        borderColor: '#cfd7e6',
-        borderWidth: 0.20,
+        // Keep base borders minimal; draw crisp borders in a separate mapline series
+        borderColor: '#000',           // very thin, barely visible
+        borderWidth: 0.15,             // keep thinner than before
         allowPointSelect: true,
         states: {
-          hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.2, borderColor: '#000', brightness: 0.15 },
-          select: { color: '#ffc54d', borderColor: '#000', borderWidth: 0.4, brightness: 0 }
+          hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.2, borderColor: '#000', brightness: 0.10 },
+          select: { color: '#ffc54d', borderColor: '#000', borderWidth: 0.6, brightness: 0 }
         },
 
         dataLabels: { enabled: false },
@@ -522,16 +512,10 @@ function buildNameToIso2() {
               const iso2  = hcKey;
               const display = (TOTALS[iso2]?.name) || this.name || iso2;
 
-              // Remember selection
-              SELECTED_KEY = hcKey;
-
-              // Native select (for a11y) – single select
+              // Single select
               this.series.points.forEach(p => { if (p !== this && p.selected) p.select(false, false); });
               this.select(true, false);
-
-              // Paint overlay
-              selectionSeries.setData([[hcKey.toLowerCase(), 1]], false);
-              chart.redraw();
+              SELECTED_KEY = hcKey;
 
               try {
                 const holidays = await getCountryDetails(iso2);
@@ -549,41 +533,31 @@ function buildNameToIso2() {
       }]
     });
 
-    // === Selection overlay series (paints the clicked country on top) ===
-    const selectionSeries = chart.addSeries({
-      type: 'map',
-      name: 'SelectionOverlay',
-      mapData: chart.series[0].mapData,
-      joinBy: ['hc-key','hc-key'],
-      data: [],
-      colorAxis: false,
-      color: '#ffc54d',
-      borderColor: '#000',
-      borderWidth: 0.8,
+    // === Thin, non-interactive world borders (for crisp outlines) ===
+    const borderLines = Highcharts.geojson(topology, 'mapline');
+    chart.addSeries({
+      type: 'mapline',
+      data: borderLines,
+      color: '#cfd7e6',            // subtle gray; change to '#000' if you want black
+      lineWidth: 0.6,              // thin borders
       enableMouseTracking: false,
       showInLegend: false,
-      zIndex: 7,
-      states: { hover: { enabled: false }, select: { enabled: false } }
+      zIndex: 6
     }, false);
+    chart.redraw();
 
-    // Re-apply selection overlay (and native select) after any data update/redraw
+    // Re-apply native selection after any data update/redraw
     function reselectIfNeeded() {
-      if (!SELECTED_KEY) {
-        selectionSeries.setData([], false);
-        return;
-      }
-      selectionSeries.setData([[SELECTED_KEY.toLowerCase(), 1]], false);
-
+      if (!SELECTED_KEY) return;
       const s = chart.series?.[0];
-      if (s?.points?.length) {
-        const pt = s.points.find(p => String(
-          (p.options && (p.options['hc-key'] || p.options.hckey || p.options.key)) ||
-          p['hc-key'] || p.key || ''
-        ).toUpperCase() === SELECTED_KEY);
-        if (pt) {
-          s.points.forEach(p => { if (p !== pt && p.selected) p.select(false, false); });
-          pt.select(true, false);
-        }
+      if (!s?.points?.length) return;
+      const pt = s.points.find(p => String(
+        (p.options && (p.options['hc-key'] || p.options.hckey || p.options.key)) ||
+        p['hc-key'] || p.key || ''
+      ).toUpperCase() === SELECTED_KEY);
+      if (pt) {
+        s.points.forEach(p => { if (p !== pt && p.selected) p.select(false, false); });
+        pt.select(true, false);
       }
     }
 
@@ -676,19 +650,17 @@ function buildNameToIso2() {
         return;
       }
 
-      // --- TODAY (minimal + robust) ---
+      // --- TODAY ---
       setLoading(true, 'Loading Today…');
 
-      // Normalize today list using util; compare in lowercase
-      const todayList = await fetchTodaySet(YEAR);           // ISO2 UPPER (unique)
+      const todayList = await fetchTodaySet(YEAR); // ISO2 UPPER
       const todaySet = new Set(todayList.map(c => c.toLowerCase()));
 
-      // Build data straight from map geometry keys
       const mapData = chart.series[0].mapData || [];
       const todayData = mapData.map(p => {
-        const keyLc = String(p && (p['hc-key'] || p.hckey || p.key) || '').toLowerCase(); // e.g., 'al'
-        const iso2 = keyLc.toUpperCase(); // e.g., 'AL'
-        const hasHoliday = todaySet.has(keyLc); // case-insensitive match
+        const keyLc = String(p && (p['hc-key'] || p.hckey || p.key) || '').toLowerCase();
+        const iso2 = keyLc.toUpperCase();
+        const hasHoliday = todaySet.has(keyLc);
         return [keyLc, hasHoliday ? 1 : null, (TOTALS[iso2]?.name) || iso2];
       });
 
@@ -768,7 +740,6 @@ function buildNameToIso2() {
     const r = await fetch(`/api/todaySet?date=${dateISO}`, { cache: 'no-store' });
     const j = await r.json();
     if (!r.ok) throw new Error(j?.error || `todaySet failed for ${dateISO}`);
-    // j.today = ["AL","FR",...], j.items = [{iso2,name}] for that date
     return j;
   }
 
@@ -785,7 +756,6 @@ function buildNameToIso2() {
 
       const results = await Promise.all(dates.map(fetchDay));
 
-      // union countries + group items by date
       const iso2Set = new Set();
       const byDate = {};
       results.forEach(r => {
@@ -793,7 +763,6 @@ function buildNameToIso2() {
         if (r.items?.length) (byDate[r.date] ||= []).push(...r.items);
       });
 
-      // sort by date asc
       const sortedByDate = Object.fromEntries(Object.keys(byDate).sort().map(k => [k, byDate[k]]));
 
       if (typeof window.haColorCountries === 'function') {
@@ -809,7 +778,6 @@ function buildNameToIso2() {
     }
   }
 
-  // Wire buttons; stop parent tab handler from hijacking the click
   function setActive(btn) {
     document.querySelectorAll('.view-tag').forEach(b => b.classList.remove('is-active'));
     btn?.classList.add('is-active');
