@@ -394,20 +394,45 @@ function buildNameToIso2() {
       exporting: {
         enabled: true,
         buttons: {
-          contextButton: { align: 'left', verticalAlign: 'top', x: -8, y: 8, theme: { r: 0 } }
+          contextButton: { align: 'right', verticalAlign: 'top', x: -8, y: 8, theme: { r: 8 } }
         }
       },
 
       // 🔒 Disable all zoom interactions/buttons
       mapNavigation: {
-        enabled: false,
+        enabled: true,
         enableButtons: true,
         enableMouseWheelZoom: true,
         enableDoubleClickZoomTo: false,
         enableDoubleClickZoom: false,
-        enableTouchZoom: false
+        enableTouchZoom: false,
+
+     /***************/ 
+        buttonOptions: {
+          align: 'right',
+          verticalAlign: 'top',
+          x: -8,
+          y: 56,                    // ≈ burger(44px tall) + gap; tweak if needed
+          theme: {
+            fill: '#fff',
+            stroke: '#cfd7e6',
+            'stroke-width': 1,
+            r: 8,
+            states: {
+              hover: { fill: '#e8f3ff' },
+              select: { fill: '#cde3ff' }
+            }
+          }
+        },
+
+        // (Optional) precise spacing between + and − if you want finer control
+        buttons: {
+          zoomIn:  { /* y: 0 (default) */ },
+          zoomOut: { y: 44 }        // stack below zoomIn; match your button size
+        }
       },
 
+     /***************/ 
       legend: {
         layout: 'horizontal',
         align: 'center',
