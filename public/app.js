@@ -39,26 +39,29 @@ function buildNameToIso2() {
   let CURRENT_MODE = 'list';           // 'list' or 'cal' (only used in All Year)
   let CURRENT_DETAILS = null;          // { iso2, displayName, holidays, regionCode }
 
-  // All Year single-country highlight (via per-point color override)
+  // All-Year selection via per-point color
   let SELECTED_KEY = null;     // 'CA', 'FR', ...
-  let SELECTED_POINT = null;   // cached Highcharts point ref
+  let SELECTED_POINT = null;   // Highcharts point
 
   // Tooltip sources for non-All-Year views
-  // TODAY_ITEMS_MAP: ISO2 -> [holiday names today]
-  // RANGE_ITEMS_MAP: ISO2 -> [holiday names in the window]
-  let TODAY_ITEMS_MAP = new Map();
-  let RANGE_ITEMS_MAP = new Map();
+  let TODAY_ITEMS_MAP = new Map(); // ISO2 -> [holiday names today]
+  let RANGE_ITEMS_MAP = new Map(); // ISO2 -> [holiday names within window]
 
   // ---- Elements ----
-  const detailsTitle = document.getElementById('details-title');
-  const detailsBody  = document.getElementById('details-body');
-  const loadingEl    = document.getElementById('view-loading');
-  const detailsTabsEl = document.querySelector('.details-views'); // the List/Calendar box
+  const detailsTitle  = document.getElementById('details-title');
+  const detailsBody   = document.getElementById('details-body');
+  const loadingEl     = document.getElementById('view-loading');
+  const detailsTabsEl = document.querySelector('.details-views'); // List/Calendar pills
 
-  const showDetailsTabs = (show) => {
-    if (!detailsTabsEl) return;
-    detailsTabsEl.hidden = !show;
-  };
+  function setDetailsPanelVisible(show) {
+    const panel = detailsBody?.closest('.card') || detailsBody?.parentElement;
+    if (panel) panel.hidden = !show;
+    if (detailsTitle)  detailsTitle.hidden = !show;
+    if (detailsTabsEl) detailsTabsEl.hidden = !show;
+    const regionList = document.getElementById('region-list');
+    if (regionList) regionList.hidden = !show;
+  }
+  const showDetailsTabs = (show) => { if (detailsTabsEl) detailsTabsEl.hidden = !show; };
 
   // ---- Loader + cache helpers (Today view) ----
   let TODAY_CACHE = { at: 0, list: [] };
@@ -82,19 +85,13 @@ function buildNameToIso2() {
 
   async function fetchTodaySet(year) {
     const now = Date.now();
-    if (now - TODAY_CACHE.at < TODAY_TTL_MS && TODAY_CACHE.list.length) {
-      return TODAY_CACHE.list;
-    }
+    if (now - TODAY_CACHE.at < TODAY_TTL_MS && TODAY_CACHE.list.length) return TODAY_CACHE.list;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
     try {
       const params = new URLSearchParams({ year: String(year) });
-      if (TODAY_MODE === 'global') {
-        params.set('mode', 'global');
-        params.set('tz', USER_TZ);
-      } else {
-        params.set('mode', 'local');
-      }
+      if (TODAY_MODE === 'global') { params.set('mode', 'global'); params.set('tz', USER_TZ); }
+      else { params.set('mode', 'local'); }
       const res = await fetch(`/api/todaySet?${params.toString()}`, { cache: 'no-store', signal: controller.signal });
       clearTimeout(timeout);
       const raw = res.ok ? await res.json() : { today: [] };
@@ -114,7 +111,6 @@ function buildNameToIso2() {
       const r = await fetch(`/api/todaySet?date=${dateISO}`, { cache: 'no-store' });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || 'todaySet failed');
-      // j.items = [{ iso2, name }]
       const m = new Map();
       (j.items || []).forEach(x => {
         const key = String(x.iso2 || '').toUpperCase().slice(0,2);
@@ -153,7 +149,6 @@ function buildNameToIso2() {
   async function getLongWeekends(iso2, year) {
     const key = `${iso2}-${year}`;
     if (longWeekendCache.has(key)) return longWeekendCache.get(key);
-
     try {
       const url = `https://date.nager.at/api/v3/LongWeekend/${year}/${iso2}`;
       const res = await fetch(url, { cache: 'no-store' });
@@ -284,6 +279,7 @@ function buildNameToIso2() {
 
   // ---- Details renderer (List/Calendar) ----
   async function renderDetails(iso2, displayName, holidays, regionCode = null, mode = CURRENT_MODE) {
+    setDetailsPanelVisible(true); // Only called in All Year
     CURRENT_DETAILS = { iso2, displayName, holidays, regionCode };
 
     const all = Array.isArray(holidays) ? holidays : [];
@@ -294,7 +290,6 @@ function buildNameToIso2() {
     const suffix = regionCode ? ` — ${regionCode}` : '';
     detailsTitle.textContent = `${displayName}${suffix} — Holidays (${YEAR})`;
 
-    // Tabs are All-Year only. Respect hidden state.
     const btnList = document.getElementById('details-view-list');
     const btnCal  = document.getElementById('details-view-cal');
     if (btnList && btnCal && !detailsTabsEl.hidden) {
@@ -619,7 +614,7 @@ function buildNameToIso2() {
     }
 
     // Expose a painter so Next 7/30 can color the map like "Today"
-    // NOW accepts second argument: itemsFlat [{iso2, name}] to build tooltips
+    // Accepts itemsFlat [{iso2, name}] to build tooltips
     window.haColorCountries = function (iso2UpperList, itemsFlat = []) {
       // Clear any All-Year highlight when painting Next-N
       clearSelectionColor();
@@ -655,10 +650,9 @@ function buildNameToIso2() {
       chart.series[0].setData(data, false);
       chart.redraw();
 
-      // IMPORTANT: mark this as a RANGE view (not 'today'),
-      // so clicking the Today tag will actually refresh.
       CURRENT_VIEW = 'range';
-      showDetailsTabs(false); // hide List/Calendar in ranges
+      showDetailsTabs(false);
+      setDetailsPanelVisible(false); // hide everything under the map
     };
 
     // ---- View tags (All Year / Today) ----
@@ -718,15 +712,16 @@ function buildNameToIso2() {
         }, false);
         chart.series[0].setData(ALL_DATA, false);
         chart.redraw();
-        showDetailsTabs(true);        // show List/Calendar only in All Year
-        reapplySelectionIfAllYear();  // repaint yellow selection if any
+        setDetailsPanelVisible(true);
+        showDetailsTabs(true);
+        reapplySelectionIfAllYear();
         return;
       }
 
       // --- TODAY ---
-      // Clear All-Year selection visuals
       clearSelectionColor();
-      showDetailsTabs(false); // hide List/Calendar in Today
+      setDetailsPanelVisible(false);
+      showDetailsTabs(false);
 
       setLoading(true, 'Loading Today…');
 
@@ -784,49 +779,17 @@ function buildNameToIso2() {
     return isoUTC(new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate())));
   }
 
-  function setLoading(msg) {
-    const chip = $('#view-loading');
-    if (!chip) return;
-    if (msg) { chip.textContent = msg; chip.hidden = false; document.body.setAttribute('aria-busy', 'true'); }
-    else { chip.hidden = true; document.body.removeAttribute('aria-busy'); }
-  }
-
-  function renderDetailsByDate(byDate, titleNote) {
-    const body = $('#details-body');
-    if (!body) return;
-    body.innerHTML = '';
-    const wrap = document.createElement('div');
-    for (const [date, items] of Object.entries(byDate)) {
-      const sec = document.createElement('section');
-      sec.className = 'details-section';
-      const h = document.createElement('h4');
-      h.textContent = `${date} (${weekdayUTC(date)}) — ${items.length} holiday${items.length>1?'s':''}`;
-      sec.appendChild(h);
-      const ul = document.createElement('ul');
-      items.forEach(x => {
-        const li = document.createElement('li');
-        li.textContent = `${x.iso2}: ${x.name}`;
-        ul.appendChild(li);
-      });
-      sec.appendChild(ul);
-      wrap.appendChild(sec);
-    }
-    body.appendChild(wrap);
-
-    const title = $('#details-title');
-    if (title && titleNote) title.textContent = `Holidays (${new Date().getFullYear()}) — ${titleNote}`;
-  }
+  // (Kept for completeness, but we won't render the list in ranges anymore)
+  function renderDetailsByDate(_byDate, _titleNote) {}
 
   async function fetchDay(dateISO) {
     const r = await fetch(`/api/todaySet?date=${dateISO}`, { cache: 'no-store' });
     const j = await r.json();
     if (!r.ok) throw new Error(j?.error || `todaySet failed for ${dateISO}`);
-    // j.today = ["AL","FR",...], j.items = [{iso2,name}] for that date
-    return j;
+    return j; // {date, today:[], items:[{iso2,name}]}
   }
 
   async function showNext(days) {
-    setLoading(`Loading next ${days} days…`);
     try {
       const start = todayISO();
       const [y,m,d] = start.split('-').map(Number);
@@ -838,32 +801,19 @@ function buildNameToIso2() {
 
       const results = await Promise.all(dates.map(fetchDay));
 
-      // union countries + group items by date
       const iso2Set = new Set();
-      const byDate = {};
-      const itemsFlat = []; // collect for tooltips in range
+      const itemsFlat = [];
       results.forEach(r => {
         (r.today || []).forEach(c => iso2Set.add(c));
-        if (r.items?.length) {
-          (byDate[r.date] ||= []).push(...r.items);
-          itemsFlat.push(...r.items);
-        }
+        if (r.items?.length) itemsFlat.push(...r.items);
       });
 
-      // sort by date asc
-      const sortedByDate = Object.fromEntries(Object.keys(byDate).sort().map(k => [k, byDate[k]]));
-
       if (typeof window.haColorCountries === 'function') {
-        // pass both the country set and the flat list of items for tooltips
+        // Hide panel in ranges & paint countries; provide items for tooltips
         window.haColorCountries(Array.from(iso2Set).sort(), itemsFlat);
       }
-      const end = dates[dates.length - 1];
-      renderDetailsByDate(sortedByDate, `Next ${days} days (${start} → ${end})`);
     } catch (e) {
       console.error('[nextN] error', e);
-      renderDetailsByDate({}, `Next ${days} days — error`);
-    } finally {
-      setLoading(null);
     }
   }
 
