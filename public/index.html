@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Holiday Atlas — National Holidays Map</title>
 
-    <link rel="stylesheet" href="/styles.css?v=14" />
-    <link rel="stylesheet" href="/busiest-days.css?v=1" />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/busiest-days.css" />
 
     <script src="https://code.highcharts.com/maps/highmaps.js" defer></script>
     <script src="https://code.highcharts.com/modules/exporting.js" defer></script>
     <script src="https://code.highcharts.com/modules/accessibility.js" defer></script>
-    <script type="module" src="/app.js?v=14"></script>
-    <script src="/busiest-days.js?v=1" defer></script>
+    <script type="module" src="/app.js"></script>
+    <script src="/busiest-days.js" defer></script>
   </head>
   <body>
     <header>
@@ -28,14 +28,6 @@
     </div>
 
     <div id="view-loading" class="loading-chip" hidden>Loading Today…</div>
-
-    <div id="ui-top-right">
-      <button id="menuBtn" aria-label="Open menu">☰</button>
-      <div id="zoomStack" role="group" aria-label="Map zoom">
-        <button id="zoomIn" aria-label="Zoom in">+</button>
-        <button id="zoomOut" aria-label="Zoom out">−</button>
-      </div>
-    </div>
 
     <div class="map-wrap">
       <div id="wpr-map" role="img" aria-label="Choropleth map of national holidays"></div>
