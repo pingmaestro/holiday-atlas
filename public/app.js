@@ -401,10 +401,10 @@ function buildNameToIso2() {
       // 🔒 Disable all zoom interactions/buttons
       mapNavigation: {
         enabled: false,
-        enableButtons: false,
-        enableMouseWheelZoom: true,
-        enableDoubleClickZoomTo: false,
-        enableDoubleClickZoom: false,
+        enableButtons: true,
+        enableMouseWheelZoom: false,
+        enableDoubleClickZoomTo: true,
+        enableDoubleClickZoom: true,
         enableTouchZoom: false
       },
 
