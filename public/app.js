@@ -39,6 +39,9 @@ function buildNameToIso2() {
   let CURRENT_MODE = 'list';           // 'list' or 'cal'
   let CURRENT_DETAILS = null;          // { iso2, displayName, holidays, regionCode }
 
+  // NEW: remember the currently selected country (ISO2 UPPER / hc-key)
+  let SELECTED_KEY = null;             // NEW
+
   // ---- Elements ----
   const detailsTitle = document.getElementById('details-title');
   const detailsBody  = document.getElementById('details-body');
@@ -62,7 +65,7 @@ function buildNameToIso2() {
 
   // Detect user's IANA zone once
   const USER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-// Choose how "Today" works: 'global' (anchored to USER_TZ) or 'local'
+  // Choose how "Today" works: 'global' (anchored to USER_TZ) or 'local'
   const TODAY_MODE = 'global'; // ← set to 'local' if you want per-country local dates
 
   async function fetchTodaySet(year) {
@@ -398,21 +401,19 @@ function buildNameToIso2() {
         }
       },
 
-      // 🔒 Disable all zoom interactions/buttons
       mapNavigation: {
-        enabled: true,
+        enabled: true,                 // CHANGED: ensure buttons render
         enableButtons: true,
         enableMouseWheelZoom: true,
         enableDoubleClickZoomTo: false,
         enableDoubleClickZoom: false,
         enableTouchZoom: false,
 
-     /***************/ 
         buttonOptions: {
           align: 'right',
           verticalAlign: 'top',
           x: -8,
-          y: 56,                    // ≈ burger(44px tall) + gap; tweak if needed
+          y: 56,                       // under burger
           theme: {
             fill: '#fff',
             stroke: '#cfd7e6',
@@ -424,15 +425,12 @@ function buildNameToIso2() {
             }
           }
         },
-
-        // (Optional) precise spacing between + and − if you want finer control
         buttons: {
-          zoomIn:  { /* y: 0 (default) */ },
-          zoomOut: { y: 44 }        // stack below zoomIn; match your button size
+          zoomIn:  { /* default y: 0 */ },
+          zoomOut: { y: 44 }           // stack
         }
       },
 
-     /***************/ 
       legend: {
         layout: 'horizontal',
         align: 'center',
@@ -504,7 +502,7 @@ function buildNameToIso2() {
         allowPointSelect: true,
         states: {
           hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.2, borderColor: '#000', brightness: 0.15 },
-          select: { color: '#ffe082', borderColor: '#000', borderWidth: 0.2, brightness: 0.15 }
+          select: { color: '#ffc54d', borderColor: '#000', borderWidth: 0.4, brightness: 0 } // CHANGED: make select distinct
         },
 
         dataLabels: { enabled: false },
@@ -517,10 +515,10 @@ function buildNameToIso2() {
               c.tooltip.refresh(this);
               this.setState('hover');
             },
-            mouseOut: function () {
+            mouseOut: function () {                 // CHANGED: don't clear if selected
               const c = this.series.chart;
               c.tooltip.hide(0);
-              this.setState();
+              if (!this.selected) this.setState();
             },
             click: async function () {
               // Highlight + render table (no zoom)
@@ -531,6 +529,8 @@ function buildNameToIso2() {
               // Select only one
               this.series.points.forEach(p => { if (p !== this && p.selected) p.select(false, false); });
               this.select(true, false);
+
+              SELECTED_KEY = hcKey;                // NEW: remember selection
 
               try {
                 const holidays = await getCountryDetails(iso2);
@@ -547,7 +547,24 @@ function buildNameToIso2() {
         }
       }]
     });
-    
+
+    // NEW: re-apply a remembered selection after any data update/redraw
+    function reselectIfNeeded() {
+      if (!SELECTED_KEY) return;
+      const s = chart.series?.[0];
+      if (!s || !s.points?.length) return;
+
+      const pt = s.points.find(p => String(
+        (p.options && (p.options['hc-key'] || p.options.hckey || p.options.key)) ||
+        p['hc-key'] || p.key || ''
+      ).toUpperCase() === SELECTED_KEY);
+
+      if (pt) {
+        s.points.forEach(p => { if (p !== pt && p.selected) p.select(false, false); });
+        pt.select(true, false);
+      }
+    }
+
     // Expose a painter so Next 7/30 can color the map like "Today"
     window.haColorCountries = function (iso2UpperList) {
       const lcSet = new Set(iso2UpperList.map(c => String(c).toLowerCase()));
@@ -572,6 +589,7 @@ function buildNameToIso2() {
 
       chart.series[0].setData(data, false);
       chart.redraw();
+      reselectIfNeeded();                           // NEW: keep selection after paint
       CURRENT_VIEW = 'today';
     };
 
@@ -632,6 +650,7 @@ function buildNameToIso2() {
         }, false);
         chart.series[0].setData(ALL_DATA, false);
         chart.redraw();
+        reselectIfNeeded();                         // NEW
         return;
       }
 
@@ -664,6 +683,7 @@ function buildNameToIso2() {
 
       chart.series[0].setData(todayData, false);
       chart.redraw();
+      reselectIfNeeded();                           // NEW
       setLoading(false);
     }
 
