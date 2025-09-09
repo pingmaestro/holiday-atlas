@@ -39,8 +39,9 @@ function buildNameToIso2() {
   let CURRENT_MODE = 'list';           // 'list' or 'cal'
   let CURRENT_DETAILS = null;          // { iso2, displayName, holidays, regionCode }
 
-  // Persistent selection (All Year only)
-  let SELECTED_KEY = null;             // ISO2 UPPER (e.g., 'CA')
+  // Selection (All Year only). We *paint* a single point with a fixed color.
+  let SELECTED_KEY = null;     // 'CA', 'FR', ...
+  let SELECTED_POINT = null;   // cached Highcharts point ref for quick unpaint
 
   // ---- Elements ----
   const detailsTitle = document.getElementById('details-title');
@@ -74,7 +75,6 @@ function buildNameToIso2() {
     }
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
-
     try {
       const params = new URLSearchParams({ year: String(year) });
       if (TODAY_MODE === 'global') {
@@ -83,13 +83,10 @@ function buildNameToIso2() {
       } else {
         params.set('mode', 'local');
       }
-
       const res = await fetch(`/api/todaySet?${params.toString()}`, { cache: 'no-store', signal: controller.signal });
       clearTimeout(timeout);
-
       const raw = res.ok ? await res.json() : { today: [] };
       const arr = Array.isArray(raw.today) ? raw.today : [];
-
       const norm = Array.from(new Set(arr.map(c => String(c).trim().toUpperCase().slice(0,2))));
       TODAY_CACHE = { at: now, list: norm };
       return norm;
@@ -119,7 +116,6 @@ function buildNameToIso2() {
   async function getLongWeekends(iso2, year) {
     const key = `${iso2}-${year}`;
     if (longWeekendCache.has(key)) return longWeekendCache.get(key);
-
     try {
       const url = `https://date.nager.at/api/v3/LongWeekend/${year}/${iso2}`;
       const res = await fetch(url, { cache: 'no-store' });
@@ -411,10 +407,7 @@ function buildNameToIso2() {
             }
           }
         },
-        buttons: {
-          zoomIn:  {},
-          zoomOut: { y: 44 }
-        }
+        buttons: { zoomIn: {}, zoomOut: { y: 44 } }
       },
 
       legend: {
@@ -482,14 +475,14 @@ function buildNameToIso2() {
         joinBy: ['hc-key','hc-key'],
         allAreas: true,
 
-        // Base borders kept thin; selection will be drawn by overlay (same width)
+        // Thin borders always (even when "selected")
         borderColor: '#000',
         borderWidth: 0.15,
-        allowPointSelect: false, // we don't use native select color; overlay handles it
+        allowPointSelect: false, // we control highlight via point.color
 
         states: {
           hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.15, borderColor: '#000', brightness: 0.10 },
-          select: { color: undefined, borderWidth: 0.15, borderColor: '#000', brightness: 0 } // keep width same if ever used
+          select: { borderWidth: 0.15, borderColor: '#000', brightness: 0 } // keep width the same
         },
 
         dataLabels: { enabled: false },
@@ -505,7 +498,7 @@ function buildNameToIso2() {
             mouseOut: function () {
               const c = this.series.chart;
               c.tooltip.hide(0);
-              this.setState(); // hover off
+              this.setState();
             },
             click: async function () {
               const hcKey = (this.options['hc-key'] || this['hc-key'] || '').toUpperCase();
@@ -513,8 +506,8 @@ function buildNameToIso2() {
               const display = (TOTALS[iso2]?.name) || this.name || iso2;
 
               if (CURRENT_VIEW === 'all') {
-                // Set persistent selection (All Year only)
-                setSelection(hcKey);
+                // Paint this country only (yellow). Keep others as-is.
+                applySelection(this, hcKey);
               }
 
               try {
@@ -533,63 +526,59 @@ function buildNameToIso2() {
       }]
     });
 
-    // === Thin, non-interactive world borders (crisp outlines) ===
+    // Thin, crisp global borders (non-interactive)
     const borderLines = Highcharts.geojson(topology, 'mapline');
     chart.addSeries({
       type: 'mapline',
       data: borderLines,
-      color: '#cfd7e6',            // tweak if you want darker/lighter
+      color: '#cfd7e6',
       lineWidth: 0.6,
       enableMouseTracking: false,
       showInLegend: false,
       zIndex: 6
     }, false);
-
-    // === Selection overlay series (paints clicked country on top; no thicker border) ===
-    const selectionSeries = chart.addSeries({
-      type: 'map',
-      name: 'SelectionOverlay',
-      mapData: chart.series[0].mapData,
-      joinBy: ['hc-key','hc-key'],
-      data: [],
-      colorAxis: false,
-      color: '#ffc54d',            // yellow fill
-      borderColor: '#000',
-      borderWidth: 0.15,           // SAME as base so width doesn't change
-      enableMouseTracking: false,  // visuals only
-      showInLegend: false,
-      zIndex: 7,
-      states: { hover: { enabled: false }, select: { enabled: false } }
-    }, false);
-
-    // Make absolutely sure overlay never steals clicks
-    if (selectionSeries.group && selectionSeries.group.css) {
-      selectionSeries.group.css({ 'pointer-events': 'none' });
-    }
-
     chart.redraw();
 
-    // --- Selection helpers ---
-    function setSelection(hcKeyUpper) {
-      SELECTED_KEY = hcKeyUpper;
-      selectionSeries.setData([[hcKeyUpper.toLowerCase(), 1]], false);
+    // --- Selection helpers (no overlay; pure point.color override) ---
+    function applySelection(point, keyUpper) {
+      // clear previous
+      if (SELECTED_POINT && SELECTED_POINT.update) {
+        // Setting color: null returns control to colorAxis
+        SELECTED_POINT.update({ color: null }, false);
+      }
+      // set new
+      point.update({ color: '#ffc54d' }, false);
       chart.redraw();
+      SELECTED_POINT = point;
+      SELECTED_KEY = keyUpper;
     }
-    function clearSelection() {
-      SELECTED_KEY = null;
-      selectionSeries.setData([], false);
-      chart.redraw();
+
+    function clearSelectionColor() {
+      if (SELECTED_POINT && SELECTED_POINT.update) {
+        SELECTED_POINT.update({ color: null }, false);
+        chart.redraw();
+      }
     }
-    function reselectIfNeeded() {
-      if (CURRENT_VIEW !== 'all' || !SELECTED_KEY) return; // only persist in All Year
-      selectionSeries.setData([[SELECTED_KEY.toLowerCase(), 1]], false);
-      chart.redraw();
+
+    function reapplySelectionIfAllYear() {
+      if (CURRENT_VIEW !== 'all' || !SELECTED_KEY) return;
+      const s = chart.series?.[0];
+      if (!s?.points?.length) return;
+      const pt = s.points.find(p => String(
+        (p.options && (p.options['hc-key'] || p.options.hckey || p.options.key)) ||
+        p['hc-key'] || p.key || ''
+      ).toUpperCase() === SELECTED_KEY);
+      if (pt) {
+        applySelection(pt, SELECTED_KEY);
+      } else {
+        SELECTED_POINT = null;
+      }
     }
 
     // Expose a painter so Next 7/30 can color the map like "Today"
     window.haColorCountries = function (iso2UpperList) {
-      // Clear any All-Year selection when painting Next-N
-      clearSelection();
+      // Clear any All-Year highlight when painting Next-N
+      clearSelectionColor();
 
       const lcSet = new Set(iso2UpperList.map(c => String(c).toLowerCase()));
       const mapData = chart.series[0].mapData || [];
@@ -668,19 +657,19 @@ function buildNameToIso2() {
       CURRENT_VIEW = view;
 
       if (view === 'all') {
-        // Restore original classes and data, keep any All-Year selection visible
         chart.update({
           colorAxis: { dataClasses: ALL_COLOR_CLASSES, dataClassColor: 'category', nullColor: '#d9d9d9' }
         }, false);
         chart.series[0].setData(ALL_DATA, false);
         chart.redraw();
-        reselectIfNeeded();
+        // Repaint previously selected country (if any)
+        reapplySelectionIfAllYear();
         return;
       }
 
       // --- TODAY (and relatives) ---
-      // Clear selection when leaving All Year
-      clearSelection();
+      // Clear visual selection when leaving All Year
+      clearSelectionColor();
 
       setLoading(true, 'Loading Today…');
 
