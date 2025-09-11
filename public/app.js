@@ -485,11 +485,12 @@ function buildNameToIso2() {
             if (!list.length) {
               return `<strong>${esc(name)}</strong><br/><span class="pill">No national holiday today</span>`;
             }
-            // Fallback in case TODAY_PRETTY_DATE wasn't set yet
+            // Use a local 'pretty' date; fall back safely if global wasn't set yet
             const pretty = TODAY_PRETTY_DATE || new Date().toLocaleDateString(undefined, {
               weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
             });
-            const lines = list.map(nm => `${esc(TODAY_PRETTY_DATE)} — ${esc(nm)}`).join('<br/>');
+
+            const lines = list.map(nm => `${esc(pretty)} — ${esc(nm)}`).join('<br/>');
             return `<strong>${esc(name)}</strong><br/>${lines}`;
           }
 
