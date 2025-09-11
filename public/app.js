@@ -46,7 +46,11 @@ function buildNameToIso2() {
 
   // Tooltip sources for non-All-Year views
   let TODAY_ITEMS_MAP = new Map(); // ISO2 -> [holiday names today]
-  let RANGE_ITEMS_MAP = new Map(); // ISO2 -> [holiday names within window]
+  let RANGE_ITEMS_MAP = new Map(); // ISO2 -> [{date,name}, ...]
+
+  // All-Year: stable national counts precomputed from /api/holidayDetails
+  let NAT_COUNTS = new Map();  // ISO2 -> number
+  let COUNTS_READY = false;
 
   // ---- Elements ----
   const detailsTitle  = document.getElementById('details-title');
@@ -68,7 +72,7 @@ function buildNameToIso2() {
   let TODAY_CACHE = { at: 0, list: [] };
   const TODAY_TTL_MS = 10 * 60 * 1000;
 
-  function setLoading(isLoading, label = 'Loading Today…') {
+  function setLoading(isLoading, label = 'Loading…') {
     if (!loadingEl) return;
     if (isLoading) {
       loadingEl.textContent = label;
@@ -173,6 +177,47 @@ function buildNameToIso2() {
       const payload = { list: [], dateSet: new Set() };
       longWeekendCache.set(key, payload);
       return payload;
+    }
+  }
+
+  // ---- All-Year national counts (precompute for stable hover) ----
+  async function computeNatCount(iso2) {
+    const list = await getCountryDetails(iso2); // uses cache
+    return Array.isArray(list) ? list.filter(h => h && h.global === true).length : 0;
+  }
+  async function precomputeAllNatCounts(year) {
+    const iso2s = Object.keys(TOTALS || {});
+    const pool = 8; let i = 0;
+    const workers = Array.from({ length: pool }, async () => {
+      while (i < iso2s.length) {
+        const iso2 = iso2s[i++];
+        try {
+          const n = await computeNatCount(iso2);
+          NAT_COUNTS.set(iso2, n);
+        } catch {
+          NAT_COUNTS.set(iso2, Number.isFinite(TOTALS?.[iso2]?.national) ? TOTALS[iso2].national : 0);
+        }
+      }
+    });
+    await Promise.all(workers);
+    COUNTS_READY = true;
+  }
+  function applyNatCountsToChart(chart, ALL_DATA) {
+    const s = chart.series?.[0];
+    if (!s) return;
+    const updated = (s.mapData || []).map(p => {
+      const keyLc = String(p && (p['hc-key'] || p.hckey || p.key) || '').toLowerCase();
+      const iso2 = keyLc.toUpperCase();
+      const name = (TOTALS[iso2]?.name) || iso2;
+      const val = NAT_COUNTS.has(iso2) ? NAT_COUNTS.get(iso2) : null;
+      return [keyLc, Number.isFinite(val) ? val : null, name];
+    });
+    s.setData(updated, false);
+    if (Array.isArray(ALL_DATA)) {
+      for (let row of ALL_DATA) {
+        const iso2 = String(row[0] || '').toUpperCase();
+        if (NAT_COUNTS.has(iso2)) row[1] = NAT_COUNTS.get(iso2);
+      }
     }
   }
 
@@ -333,58 +378,19 @@ function buildNameToIso2() {
 
     detailsBody.innerHTML = `<div class="rows">${rows}</div>`;
     hideCalTip();
-
-      // After computing natList and before exiting renderDetails:
-    try {
-      const series = chart?.series?.[0];
-      if (series) {
-        const keyLc = String(iso2).toLowerCase();
-        const pt = series.points.find(p => {
-          const k = (p.options && (p.options['hc-key'] || p.options.hckey || p.options.key)) || p['hc-key'] || p.key || '';
-          return String(k).toLowerCase() === keyLc;
-        });
-        const count = natList.length;
-
-        // Update the point's numeric value (keeps your manual selection color intact)
-        if (pt && pt.update) pt.update({ value: count }, false);
-
-        // Keep in-memory sources consistent for future hovers / legend
-        if (TOTALS[iso2]) TOTALS[iso2].national = count;
-
-        // Also update ALL_DATA used when switching back to "All Year"
-        if (Array.isArray(ALL_DATA)) {
-          const idx = ALL_DATA.findIndex(row => row && row[0] === keyLc);
-          if (idx > -1) ALL_DATA[idx][1] = count;
-        }
-
-        // Redraw once after updates
-        chart.redraw();
-      }
-    } catch (_) { /* no-op if chart not ready */ }
-  }
-    
-  // Return national-holiday count from the details cache if we have it
-  function getNatCountFromCache(iso2, year) {
-    const key = `${iso2}-${year}`;
-    const list = detailsCache.get(key);
-    if (!Array.isArray(list)) return null;
-    return list.filter(h => h && h.global === true).length;
+    // IMPORTANT: do NOT mutate counts here anymore
   }
 
-  // Prefer cached details count; otherwise fall back to point.value or TOTALS
+  // Helper used by All-Year tooltip to keep hover count consistent
   function getNatCountForTooltip(iso2, fallbackVal, year) {
-    // 1) If already fetched details exist, use that
-    const cached = getNatCountFromCache(iso2, year);
-    if (Number.isFinite(cached)) return cached;
-
-    // 2) Otherwise use the point's numeric value from the map
-    if (Number.isFinite(fallbackVal)) return fallbackVal;
-
-    // 3) Finally, fall back to totals.json
-    const totalsVal = Number.isFinite(TOTALS?.[iso2]?.national)
-      ? TOTALS[iso2].national
-      : null;
-    return totalsVal;
+    if (NAT_COUNTS.has(iso2)) return NAT_COUNTS.get(iso2);
+    if (!COUNTS_READY) {
+      // while computing, show something benign (used by tooltip branch)
+      if (Number.isFinite(fallbackVal)) return fallbackVal;
+      if (Number.isFinite(TOTALS?.[iso2]?.national)) return TOTALS[iso2].national;
+      return null;
+    }
+    return null;
   }
 
   // ---- Region list card & click wiring ----
@@ -532,55 +538,55 @@ function buildNameToIso2() {
           const name = this.point.name || this.point.options?.label || iso2;
           const val = (typeof this.point.value === 'number') ? this.point.value : null;
 
+          // TODAY
           if (CURRENT_VIEW === 'today') {
             const list = TODAY_ITEMS_MAP.get(iso2) || []; // array of holiday names today
             if (!list.length) {
               return `<strong>${esc(name)}</strong><br/><span class="pill">No national holiday today</span>`;
             }
-            // Use a local 'pretty' date; fall back safely if global wasn't set yet
             const pretty = TODAY_PRETTY_DATE || new Date().toLocaleDateString(undefined, {
               weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
             });
-
             const lines = list.map(nm => `${esc(pretty)} — ${esc(nm)}`).join('<br/>');
             return `<strong>${esc(name)}</strong><br/>${lines}`;
           }
 
+          // RANGE (Next 7 / 30)
           if (CURRENT_VIEW === 'range') {
             const items = RANGE_ITEMS_MAP.get(iso2) || [];
             if (!items.length) {
               return `<strong>${esc(name)}</strong><br/><span class="pill">No holiday in window</span>`;
             }
-
-            // sort by date (YYYY-MM-DD) and render concise lines
             items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-
             const lines = items.map(it => {
               const [yy, mm, dd] = String(it.date).split('-').map(Number);
               const pretty = new Date(yy, mm - 1, dd).toLocaleDateString(undefined, {
                 weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
               });
               return `${esc(pretty)} — ${esc(it.name)}`;
-            })
-            // (optional) cap to avoid very tall tooltips; tweak as you like
-            .slice(0, 8)
-            .join('<br/>');
-
+            }).slice(0, 8).join('<br/>');
             return `<strong>${esc(name)}</strong><br/>${lines}`;
           }
 
-          // All Year
-          const count = getNatCountForTooltip(iso2, val, YEAR);
-          return count == null
-            ? `<strong>${esc(name)}</strong><br/><span class="pill">No data</span>`
-            : `<strong>${esc(name)}</strong><br/><span class="pill">${count} national holidays</span>`;
+          // ALL YEAR — use precomputed NAT_COUNTS so hover never changes on click
+          if (CURRENT_VIEW === 'all') {
+            const count = getNatCountForTooltip(iso2, val, YEAR);
+            if (!COUNTS_READY && count == null) {
+              return `<strong>${esc(name)}</strong><br/><span class="pill">Computing…</span>`;
+            }
+            return count == null
+              ? `<strong>${esc(name)}</strong><br/><span class="pill">No data</span>`
+              : `<strong>${esc(name)}</strong><br/><span class="pill">${count} national holidays</span>`;
+          }
+
+          return `<strong>${esc(name)}</strong>`;
         }
       },
 
       plotOptions: {
         series: {
           states: {
-            hover: { animation: { duration: 0 }, halo: false },
+            hover:  { animation: { duration: 0 }, halo: false },
             inactive: { opacity: 1 }
           },
           animation: false,
@@ -624,16 +630,15 @@ function buildNameToIso2() {
               this.setState();
             },
             click: async function () {
-              if (CURRENT_VIEW !== 'all') return;
+              // Only All Year opens the panel; block until counts ready (so hover and list agree)
+              if (CURRENT_VIEW !== 'all' || !COUNTS_READY) return;
 
               const hcKey = (this.options['hc-key'] || this['hc-key'] || '').toUpperCase();
               const iso2  = hcKey;
               const display = (TOTALS[iso2]?.name) || this.name || iso2;
 
-              if (CURRENT_VIEW === 'all') {
-                // Paint this country only (yellow). Keep others as-is.
-                applySelection(this, hcKey);
-              }
+              // Paint this country only (yellow). Keep others as-is.
+              applySelection(this, hcKey);
 
               try {
                 const holidays = await getCountryDetails(iso2);
@@ -692,10 +697,24 @@ function buildNameToIso2() {
       else SELECTED_POINT = null;
     }
 
+    // === PRECOMPUTE: lock interactions, compute All-Year counts, then apply ===
+    chart.update({ plotOptions: { series: { enableMouseTracking: false, cursor: 'default' } } }, false);
+    setLoading(true, 'Computing national counts…');
+    let ALL_DATA = rows.slice(); // defined here so helpers can see it
+
+    try {
+      await precomputeAllNatCounts(YEAR);
+      applyNatCountsToChart(chart, ALL_DATA);
+    } finally {
+      chart.update({ plotOptions: { series: { enableMouseTracking: true, cursor: 'pointer' } } }, false);
+      chart.redraw();
+      setLoading(false);
+    }
+
     // Expose a painter so Next 7/30 can color the map as a choropleth by holiday COUNT
     // Accepts:
     //  - iso2UpperList: string[] (countries that have >=1 holiday in the window)
-    //  - itemsFlat:     { iso2, name, date }[] for tooltips (you already build this)
+    //  - itemsFlat:     { iso2, name, date }[] for tooltips
     //  - countsByIso2:  Map<string, number> OR plain object { CA: 5, FR: 2, ... }
     window.haColorCountries = function (iso2UpperList, itemsFlat = [], countsByIso2 = new Map()) {
       // Clear any All-Year highlight when painting Next-N
@@ -744,7 +763,7 @@ function buildNameToIso2() {
       showDetailsTabs(false);
       setDetailsPanelVisible(false); // hide everything under the map in range views
     };
-  
+
     // ---- View tags (All Year / Today) ----
     const tagsEl = document.querySelector('.view-tags');
     if (tagsEl) {
@@ -782,14 +801,14 @@ function buildNameToIso2() {
     }
 
     // ---- View switching (Map: All Year vs Today) ----
-    const ALL_DATA = rows.slice();
+    const ALL_DATA_BASE = rows.slice();
     const ALL_COLOR_CLASSES = [
-      { to: 4,              color: '#d9f2e3', name: '≤ 4' },
-      { from: 5,  to: 7,    color: '#a9d9d8', name: '5-7' },
-      { from: 8,  to: 10,   color: '#8cc7e4', name: '8-10' },
-      { from: 11, to: 13,   color: '#6db3ea', name: '11-13' },
-      { from: 14, to: 19,   color: '#4d9ae8', name: '14-19' },
-      { from: 20,           color: '#0b3d91', name: '20+' }
+      { to: 4,              color: '#E7F6BC', name: '≤ 4' },
+      { from: 5,  to: 7,    color: '#BEE6B6', name: '5-7' },
+      { from: 8,  to: 10,   color: '#81CEBC', name: '8-10' },
+      { from: 11, to: 13,   color: '#288DBB', name: '11-13' },
+      { from: 14, to: 19,   color: '#2160A8', name: '14-19' },
+      { from: 20,           color: '#081D58', name: '20+' }
     ];
 
     async function setView(view) {
@@ -800,7 +819,17 @@ function buildNameToIso2() {
         chart.update({
           colorAxis: { dataClasses: ALL_COLOR_CLASSES, dataClassColor: 'category', nullColor: '#d9d9d9' }
         }, false);
-        chart.series[0].setData(ALL_DATA, false);
+
+        // Use the precomputed NAT_COUNTS to populate ALL view data
+        const mapData = chart.series[0].mapData || [];
+        const data = mapData.map(p => {
+          const keyLc = String(p && (p['hc-key'] || p.hckey || p.key) || '').toLowerCase();
+          const iso2 = keyLc.toUpperCase();
+          const val = NAT_COUNTS.has(iso2) ? NAT_COUNTS.get(iso2) : null;
+          return [keyLc, Number.isFinite(val) ? val : null, (TOTALS[iso2]?.name) || iso2];
+        });
+        chart.series[0].setData(data, false);
+
         chart.redraw();
         setDetailsPanelVisible(true);
         showDetailsTabs(true);
@@ -815,7 +844,6 @@ function buildNameToIso2() {
 
       setLoading(true, 'Loading Today…');
 
-      // Build tooltip map with real holiday names for today
       const todayISO = todayISO_UTC();
       TODAY_ITEMS_MAP = await fetchTodayItemsFor(todayISO);
 
@@ -824,7 +852,6 @@ function buildNameToIso2() {
         weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
       });
 
-      // Paint countries that have holiday today
       const todayList = await fetchTodaySet(YEAR); // unique ISO2 upper
       const todaySet = new Set(todayList.map(c => c.toLowerCase()));
 
@@ -904,16 +931,14 @@ function buildNameToIso2() {
       const counts = new Map();
 
       results.forEach(r => {
-        // items: [{ iso2, name }] on that r.date
         if (r.items?.length) {
           r.items.forEach(x => {
             const iso2 = String(x.iso2 || '').toUpperCase().slice(0, 2);
             iso2Set.add(iso2);
             itemsFlat.push({ iso2, name: x.name, date: r.date });
-            counts.set(iso2, (counts.get(iso2) || 0) + 1); // count holidays
+            counts.set(iso2, (counts.get(iso2) || 0) + 1);
           });
         }
-        // also union the 'today' list (in case an edge returns country with no items payload)
         (r.today || []).forEach(c => iso2Set.add(String(c).toUpperCase().slice(0, 2)));
       });
 
