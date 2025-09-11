@@ -38,6 +38,7 @@ function buildNameToIso2() {
   let CURRENT_VIEW = 'all';            // 'all' | 'today' | 'range'
   let CURRENT_MODE = 'list';           // 'list' or 'cal' (only used in All Year)
   let CURRENT_DETAILS = null;          // { iso2, displayName, holidays, regionCode }
+  let TODAY_PRETTY_DATE = '';
 
   // All-Year selection via per-point color
   let SELECTED_KEY = null;     // 'CA', 'FR', ...
@@ -480,10 +481,12 @@ function buildNameToIso2() {
           const val = (typeof this.point.value === 'number') ? this.point.value : null;
 
           if (CURRENT_VIEW === 'today') {
-            const list = TODAY_ITEMS_MAP.get(iso2) || [];
-            return list.length
-              ? `<strong>${esc(name)}</strong><br/><span class="pill">${esc(list.join(', '))}</span>`
-              : `<strong>${esc(name)}</strong><br/><span class="pill">No holiday today</span>`;
+            const list = TODAY_ITEMS_MAP.get(iso2) || []; // array of holiday names today
+            if (!list.length) {
+              return `<strong>${esc(name)}</strong><br/><span class="pill">No holiday today</span>`;
+            }
+            const lines = list.map(nm => `${esc(TODAY_PRETTY_DATE)} — ${esc(nm)}`).join('<br/>');
+            return `<strong>${esc(name)}</strong><br/>${lines}`;
           }
 
           if (CURRENT_VIEW === 'range') {
@@ -547,6 +550,8 @@ function buildNameToIso2() {
               this.setState();
             },
             click: async function () {
+              if (CURRENT_VIEW !== 'all') return;
+
               const hcKey = (this.options['hc-key'] || this['hc-key'] || '').toUpperCase();
               const iso2  = hcKey;
               const display = (TOTALS[iso2]?.name) || this.name || iso2;
@@ -728,6 +733,11 @@ function buildNameToIso2() {
       // Build tooltip map with real holiday names for today
       const todayISO = todayISO_UTC();
       TODAY_ITEMS_MAP = await fetchTodayItemsFor(todayISO);
+
+      const [yy, mm, dd] = todayISO.split('-').map(Number);
+      TODAY_PRETTY_DATE = new Date(yy, mm - 1, dd).toLocaleDateString(undefined, {
+        weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
+      });
 
       // Paint countries that have holiday today
       const todayList = await fetchTodaySet(YEAR); // unique ISO2 upper
