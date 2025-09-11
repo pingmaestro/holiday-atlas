@@ -639,13 +639,16 @@ function buildNameToIso2() {
       else SELECTED_POINT = null;
     }
 
-    // Expose a painter so Next 7/30 can color the map like "Today"
-    // Accepts itemsFlat [{iso2, name}] to build tooltips
-    window.haColorCountries = function (iso2UpperList, itemsFlat = []) {
+    // Expose a painter so Next 7/30 can color the map as a choropleth by holiday COUNT
+    // Accepts:
+    //  - iso2UpperList: string[] (countries that have >=1 holiday in the window)
+    //  - itemsFlat:     { iso2, name, date }[] for tooltips (you already build this)
+    //  - countsByIso2:  Map<string, number> OR plain object { CA: 5, FR: 2, ... }
+    window.haColorCountries = function (iso2UpperList, itemsFlat = [], countsByIso2 = new Map()) {
       // Clear any All-Year highlight when painting Next-N
       clearSelectionColor();
 
-      // Build tooltip map for the range
+      // Build tooltip map for the range: ISO2 -> [{date, name}, ...]
       RANGE_ITEMS_MAP = new Map();
       (itemsFlat || []).forEach(x => {
         const k = String(x.iso2 || '').toUpperCase().slice(0, 2);
@@ -653,21 +656,31 @@ function buildNameToIso2() {
         RANGE_ITEMS_MAP.get(k).push({ date: String(x.date), name: x.name });
       });
 
-      const lcSet = new Set(iso2UpperList.map(c => String(c).toLowerCase()));
+      // Normalize counts map (accept Map or plain object)
+      const countsMap = countsByIso2 instanceof Map
+        ? countsByIso2
+        : new Map(Object.entries(countsByIso2 || {}).map(([k, v]) => [String(k).toUpperCase().slice(0,2), Number(v) || 0]));
+
+      const lcSet = new Set((iso2UpperList || []).map(c => String(c).toLowerCase()));
       const mapData = chart.series[0].mapData || [];
       const data = mapData.map(p => {
         const keyLc = String(p && (p['hc-key'] || p.hckey || p.key) || '').toLowerCase();
         const iso2 = keyLc.toUpperCase();
-        const has = lcSet.has(keyLc);
-        return [keyLc, has ? 1 : null, (TOTALS[iso2]?.name) || iso2];
+        // prefer explicit count if present; otherwise treat as 1 for any marked country
+        const count = countsMap.has(iso2) ? (countsMap.get(iso2) || 0) : (lcSet.has(keyLc) ? 1 : 0);
+        return [keyLc, count > 0 ? count : null, (TOTALS[iso2]?.name) || iso2];
       });
 
+      // Choropleth classes by COUNT within the window
       chart.update({
         colorAxis: {
           dataClassColor: 'category',
           dataClasses: [
-            { to: 0, color: '#d9d9d9', name: 'No holiday in window' },
-            { from: 1, color: '#0b3d91', name: 'Has ≥1 holiday' }
+            { to: 1,           color: '#cfe8ff', name: '1 holiday' },
+            { from: 2, to: 3,  color: '#9fd0ff', name: '2–3' },
+            { from: 4, to: 6,  color: '#6fb8ff', name: '4–6' },
+            { from: 7, to: 10, color: '#3da0ff', name: '7–10' },
+            { from: 11,        color: '#0b79e3', name: '11+' }
           ],
           nullColor: '#d9d9d9'
         }
@@ -678,9 +691,9 @@ function buildNameToIso2() {
 
       CURRENT_VIEW = 'range';
       showDetailsTabs(false);
-      setDetailsPanelVisible(false); // hide everything under the map
+      setDetailsPanelVisible(false); // hide everything under the map in range views
     };
-
+  
     // ---- View tags (All Year / Today) ----
     const tagsEl = document.querySelector('.view-tags');
     if (tagsEl) {
@@ -823,8 +836,8 @@ function buildNameToIso2() {
   async function showNext(days) {
     try {
       const start = todayISO();
-      const [y,m,d] = start.split('-').map(Number);
-      const startDt = new Date(Date.UTC(y, m-1, d));
+      const [y, m, d] = start.split('-').map(Number);
+      const startDt = new Date(Date.UTC(y, m - 1, d));
       const dates = Array.from({ length: days }, (_, i) => {
         const dt = new Date(startDt); dt.setUTCDate(dt.getUTCDate() + i);
         return isoUTC(dt);
@@ -832,20 +845,30 @@ function buildNameToIso2() {
 
       const results = await Promise.all(dates.map(fetchDay));
 
+      // Flat items with date for tooltips
       const iso2Set = new Set();
       const itemsFlat = [];
+
+      // Count total holidays per country in the window
+      const counts = new Map();
+
       results.forEach(r => {
-        (r.today || []).forEach(c => iso2Set.add(c));
+        // items: [{ iso2, name }] on that r.date
         if (r.items?.length) {
           r.items.forEach(x => {
-            itemsFlat.push({ iso2: x.iso2, name: x.name, date: r.date });
+            const iso2 = String(x.iso2 || '').toUpperCase().slice(0, 2);
+            iso2Set.add(iso2);
+            itemsFlat.push({ iso2, name: x.name, date: r.date });
+            counts.set(iso2, (counts.get(iso2) || 0) + 1); // count holidays
           });
         }
+        // also union the 'today' list (in case an edge returns country with no items payload)
+        (r.today || []).forEach(c => iso2Set.add(String(c).toUpperCase().slice(0, 2)));
       });
 
       if (typeof window.haColorCountries === 'function') {
-        // Hide panel in ranges & paint countries; provide items for tooltips
-        window.haColorCountries(Array.from(iso2Set).sort(), itemsFlat);
+        // Paint choropleth with counts & provide items for tooltips
+        window.haColorCountries(Array.from(iso2Set).sort(), itemsFlat, counts);
       }
     } catch (e) {
       console.error('[nextN] error', e);
