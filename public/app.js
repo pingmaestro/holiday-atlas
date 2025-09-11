@@ -495,10 +495,26 @@ function buildNameToIso2() {
           }
 
           if (CURRENT_VIEW === 'range') {
-            const list = RANGE_ITEMS_MAP.get(iso2) || [];
-            return list.length
-              ? `<strong>${esc(name)}</strong><br/><span class="pill">${esc(list.join(', '))}</span>`
-              : `<strong>${esc(name)}</strong><br/><span class="pill">No holiday in window</span>`;
+            const items = RANGE_ITEMS_MAP.get(iso2) || [];
+            if (!items.length) {
+              return `<strong>${esc(name)}</strong><br/><span class="pill">No holiday in window</span>`;
+            }
+
+            // sort by date (YYYY-MM-DD) and render concise lines
+            items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+            const lines = items.map(it => {
+              const [yy, mm, dd] = String(it.date).split('-').map(Number);
+              const pretty = new Date(yy, mm - 1, dd).toLocaleDateString(undefined, {
+                weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
+              });
+              return `${esc(pretty)} — ${esc(it.name)}`;
+            })
+            // (optional) cap to avoid very tall tooltips; tweak as you like
+            .slice(0, 8)
+            .join('<br/>');
+
+            return `<strong>${esc(name)}</strong><br/>${lines}`;
           }
 
           // All Year
@@ -632,9 +648,9 @@ function buildNameToIso2() {
       // Build tooltip map for the range
       RANGE_ITEMS_MAP = new Map();
       (itemsFlat || []).forEach(x => {
-        const k = String(x.iso2 || '').toUpperCase().slice(0,2);
+        const k = String(x.iso2 || '').toUpperCase().slice(0, 2);
         if (!RANGE_ITEMS_MAP.has(k)) RANGE_ITEMS_MAP.set(k, []);
-        RANGE_ITEMS_MAP.get(k).push(x.name);
+        RANGE_ITEMS_MAP.get(k).push({ date: String(x.date), name: x.name });
       });
 
       const lcSet = new Set(iso2UpperList.map(c => String(c).toLowerCase()));
@@ -820,7 +836,11 @@ function buildNameToIso2() {
       const itemsFlat = [];
       results.forEach(r => {
         (r.today || []).forEach(c => iso2Set.add(c));
-        if (r.items?.length) itemsFlat.push(...r.items);
+        if (r.items?.length) {
+          r.items.forEach(x => {
+            itemsFlat.push({ iso2: x.iso2, name: x.name, date: r.date });
+          });
+        }
       });
 
       if (typeof window.haColorCountries === 'function') {
