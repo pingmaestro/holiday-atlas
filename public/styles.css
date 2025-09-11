@@ -141,6 +141,10 @@ header {
   border-color: #0b3d91;
 }
 
+.month-header { margin: 12px 0 6px; font-weight: 600; opacity: .8; }
+.row.past {color: red}
+
+
 /* Keep your existing list layout when list is shown */
 #details-body .rows .row { display: grid; }
 
