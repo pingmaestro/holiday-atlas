@@ -351,90 +351,135 @@ function buildNameToIso2() {
       return;
     }
 
+    // --- Calendar view (unchanged) ---
     if (mode === 'cal') {
       detailsBody.innerHTML = renderCalendarHTML(YEAR, natList, lwDates);
       hideCalTip();
       return;
     }
 
-    const rows = natList
-      .slice()
-      .sort((a, b) => parseLocalISODate(a.date) - parseLocalISODate(b.date))
-      .map(h => {
+    // --- LIST view: grouped by month + grey out past dates ---
+    // local "today" at midnight
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    // Sort all national holidays by date asc
+    const sorted = natList.slice().sort((a, b) => parseLocalISODate(a.date) - parseLocalISODate(b.date));
+
+    // Group by month number (0..11)
+    const byMonth = new Map();
+    for (const h of sorted) {
+      const d = parseLocalISODate(h.date);
+      const m = d.getMonth();
+      if (!byMonth.has(m)) byMonth.set(m, []);
+      byMonth.get(m).push(h);
+    }
+
+    // Build HTML
+    const sections = [];
+    for (const [m, items] of byMonth) {
+      const monthName = new Date(YEAR, m, 1).toLocaleString(undefined, { month: 'long' });
+
+      const rows = items.map(h => {
         const d = parseLocalISODate(h.date);
-        const pretty = d.toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
-        const nm = h.localName && h.localName !== h.name
-          ? `${esc(h.name)} <span class="note">(${esc(h.localName)})</span>`
-          : esc(h.name);
+        const isPast = d < today;
 
+        // Example: "Fri 11/28/2025"
+        const pretty = d.toLocaleDateString(undefined, {
+          weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit'
+        });
+
+        // Primary name + optional local name note
+        const primary = esc(h.name || 'Holiday');
+        const local   = (h.localName && h.localName !== h.name) ? esc(h.localName) : null;
+
+        // Long weekend tag
         const inLW = lwDates.has(h.date);
-        const lwTag = inLW ? ` <span class="pill lw" title="This holiday falls within a long weekend">Long Week-End Alert</span>` : '';
+        const lwTag = inLW
+          ? ` <span class="pill lw" title="This holiday falls within a long weekend">Long Week-End Alert</span>`
+          : '';
 
-        return `<div class="row two-cols">
-          <div class="cell">${pretty}</div>
-          <div class="cell">${nm}${lwTag}</div>
-        </div>`;
+        // Dim past rows. We add class "past" and also a light inline opacity to guarantee effect.
+        const pastCls = isPast ? ' past' : '';
+        const pastStyle = isPast ? ' style="opacity:.55"' : '';
+
+        return `
+          <div class="row two-cols${pastCls}"${pastStyle}>
+            <div class="cell">${esc(pretty)}</div>
+            <div class="cell">
+              ${local ? `<span class="note">${local}</span> — ${primary}` : primary}
+              ${lwTag}
+            </div>
+          </div>
+        `;
       }).join('');
 
-    detailsBody.innerHTML = `<div class="rows">${rows}</div>`;
+      sections.push(`
+        <section class="details-section">
+          <h4 class="month-header">${esc(monthName)}</h4>
+          <div class="rows">${rows}</div>
+        </section>
+      `);
+    }
+
+    detailsBody.innerHTML = sections.join('');
     hideCalTip();
-    // IMPORTANT: do NOT mutate counts here anymore
   }
 
-  // Helper used by All-Year tooltip to keep hover count consistent
-  function getNatCountForTooltip(iso2, fallbackVal, year) {
-    if (NAT_COUNTS.has(iso2)) return NAT_COUNTS.get(iso2);
-    if (!COUNTS_READY) {
-      // while computing, show something benign (used by tooltip branch)
-      if (Number.isFinite(fallbackVal)) return fallbackVal;
-      if (Number.isFinite(TOTALS?.[iso2]?.national)) return TOTALS[iso2].national;
+    // Helper used by All-Year tooltip to keep hover count consistent
+    function getNatCountForTooltip(iso2, fallbackVal, year) {
+      if (NAT_COUNTS.has(iso2)) return NAT_COUNTS.get(iso2);
+      if (!COUNTS_READY) {
+        // while computing, show something benign (used by tooltip branch)
+        if (Number.isFinite(fallbackVal)) return fallbackVal;
+        if (Number.isFinite(TOTALS?.[iso2]?.national)) return TOTALS[iso2].national;
+        return null;
+      }
       return null;
     }
-    return null;
-  }
 
-  // ---- Region list card & click wiring ----
-  function renderRegionList(iso2) {
-    const anchor = document.getElementById('region-list-anchor');
-    if (!anchor) return;
+    // ---- Region list card & click wiring ----
+    function renderRegionList(iso2) {
+      const anchor = document.getElementById('region-list-anchor');
+      if (!anchor) return;
 
-    let card = document.getElementById('region-list');
-    if (!card) {
-      card = document.createElement('article');
-      card.id = 'region-list';
-      card.className = 'card';
-      card.innerHTML = `<div><strong>States / Provinces</strong></div><div class="rows" id="region-rows"></div>`;
-      anchor.parentNode.insertBefore(card, anchor.nextSibling);
-    }
+      let card = document.getElementById('region-list');
+      if (!card) {
+        card = document.createElement('article');
+        card.id = 'region-list';
+        card.className = 'card';
+        card.innerHTML = `<div><strong>States / Provinces</strong></div><div class="rows" id="region-rows"></div>`;
+        anchor.parentNode.insertBefore(card, anchor.nextSibling);
+      }
 
-    const rows = document.getElementById('region-rows');
-    const m = REGIONS[iso2] || {};
-    const entries = Object.entries(m).sort((a,b) => b[1] - a[1]);
+      const rows = document.getElementById('region-rows');
+      const m = REGIONS[iso2] || {};
+      const entries = Object.entries(m).sort((a,b) => b[1] - a[1]);
 
-    if (!entries.length) {
-      rows.innerHTML = `<div class="note">No regional breakdown available.</div>`;
-      return;
-    }
+      if (!entries.length) {
+        rows.innerHTML = `<div class="note">No regional breakdown available.</div>`;
+        return;
+      }
 
-    rows.innerHTML = entries.map(([code, count]) => `
-      <div class="row region-row" data-code="${esc(code)}" style="cursor:pointer">
-        <div class="cell">${esc(code)}</div>
-        <div class="cell"><span class="pill">${count} regional</span></div>
-      </div>
-    `).join('');
+      rows.innerHTML = entries.map(([code, count]) => `
+        <div class="row region-row" data-code="${esc(code)}" style="cursor:pointer">
+          <div class="cell">${esc(code)}</div>
+          <div class="cell"><span class="pill">${count} regional</span></div>
+        </div>
+      `).join('');
 
-    rows.querySelectorAll('.region-row').forEach(el => {
-      const code = el.getAttribute('data-code');
-      el.title = `${code}: ${m[code]} regional holidays`;
-      el.addEventListener('click', async (evt) => {
-        evt.preventDefault();
-        const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
-        const countryName = (TOTALS[iso2]?.name) || iso2;
-        await renderDetails(iso2, countryName, holidays, code, CURRENT_MODE); // still national-only in panel
-        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      rows.querySelectorAll('.region-row').forEach(el => {
+        const code = el.getAttribute('data-code');
+        el.title = `${code}: ${m[code]} regional holidays`;
+        el.addEventListener('click', async (evt) => {
+          evt.preventDefault();
+          const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
+          const countryName = (TOTALS[iso2]?.name) || iso2;
+          await renderDetails(iso2, countryName, holidays, code, CURRENT_MODE); // still national-only in panel
+          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        });
       });
-    });
-  }
+    }
 
   // ---- Main init ----
   try {
