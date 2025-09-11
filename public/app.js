@@ -455,12 +455,12 @@ function buildNameToIso2() {
       colorAxis: {
         dataClassColor: 'category',
         dataClasses: [
-          { to: 4,              color: '#d9f2e3', name: '≤ 4' },
-          { from: 5,  to: 7,    color: '#a9d9d8', name: '5-7' },
-          { from: 8,  to: 10,   color: '#8cc7e4', name: '8-10' },
-          { from: 11, to: 13,   color: '#6db3ea', name: '11-13' },
-          { from: 14, to: 19,   color: '#4d9ae8', name: '14-19' },
-          { from: 20,           color: '#0b3d91', name: '20+' }
+          { to: 4,              color: '#E7F6BC', name: '≤ 4' },
+          { from: 5,  to: 7,    color: '#BEE6B6', name: '5-7' },
+          { from: 8,  to: 10,   color: '#81CEBC', name: '8-10' },
+          { from: 11, to: 13,   color: '#288DBB', name: '11-13' },
+          { from: 14, to: 19,   color: '#2160A8', name: '14-19' },
+          { from: 20,           color: '#081D58', name: '20+' }
         ],
         nullColor: '#d9d9d9',
         labels: { formatter: function() { return this.value ? Math.round(this.value) : this.value; } }
