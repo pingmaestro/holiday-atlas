@@ -676,11 +676,9 @@ function buildNameToIso2() {
         colorAxis: {
           dataClassColor: 'category',
           dataClasses: [
-            { to: 1,           color: '#cfe8ff', name: '1 holiday' },
-            { from: 2, to: 3,  color: '#9fd0ff', name: '2–3' },
-            { from: 4, to: 6,  color: '#6fb8ff', name: '4–6' },
-            { from: 7, to: 10, color: '#3da0ff', name: '7–10' },
-            { from: 11,        color: '#0b79e3', name: '11+' }
+            { to: 1,           color: '#BEE6B6', name: '1 holiday' },
+            { from: 2, to: 3,  color: '#48B2C1', name: '2-3 holidays' },
+            { from: 4,         color: '#2160A8', name: '4+ holidays' },
           ],
           nullColor: '#d9d9d9'
         }
