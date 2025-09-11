@@ -333,6 +333,58 @@ function buildNameToIso2() {
 
     detailsBody.innerHTML = `<div class="rows">${rows}</div>`;
     hideCalTip();
+
+      // After computing natList and before exiting renderDetails:
+    try {
+      const series = chart?.series?.[0];
+      if (series) {
+        const keyLc = String(iso2).toLowerCase();
+        const pt = series.points.find(p => {
+          const k = (p.options && (p.options['hc-key'] || p.options.hckey || p.options.key)) || p['hc-key'] || p.key || '';
+          return String(k).toLowerCase() === keyLc;
+        });
+        const count = natList.length;
+
+        // Update the point's numeric value (keeps your manual selection color intact)
+        if (pt && pt.update) pt.update({ value: count }, false);
+
+        // Keep in-memory sources consistent for future hovers / legend
+        if (TOTALS[iso2]) TOTALS[iso2].national = count;
+
+        // Also update ALL_DATA used when switching back to "All Year"
+        if (Array.isArray(ALL_DATA)) {
+          const idx = ALL_DATA.findIndex(row => row && row[0] === keyLc);
+          if (idx > -1) ALL_DATA[idx][1] = count;
+        }
+
+        // Redraw once after updates
+        chart.redraw();
+      }
+    } catch (_) { /* no-op if chart not ready */ }
+  }
+    
+  // Return national-holiday count from the details cache if we have it
+  function getNatCountFromCache(iso2, year) {
+    const key = `${iso2}-${year}`;
+    const list = detailsCache.get(key);
+    if (!Array.isArray(list)) return null;
+    return list.filter(h => h && h.global === true).length;
+  }
+
+  // Prefer cached details count; otherwise fall back to point.value or TOTALS
+  function getNatCountForTooltip(iso2, fallbackVal, year) {
+    // 1) If already fetched details exist, use that
+    const cached = getNatCountFromCache(iso2, year);
+    if (Number.isFinite(cached)) return cached;
+
+    // 2) Otherwise use the point's numeric value from the map
+    if (Number.isFinite(fallbackVal)) return fallbackVal;
+
+    // 3) Finally, fall back to totals.json
+    const totalsVal = Number.isFinite(TOTALS?.[iso2]?.national)
+      ? TOTALS[iso2].national
+      : null;
+    return totalsVal;
   }
 
   // ---- Region list card & click wiring ----
@@ -518,9 +570,10 @@ function buildNameToIso2() {
           }
 
           // All Year
-          return val == null
+          const count = getNatCountForTooltip(iso2, val, YEAR);
+          return count == null
             ? `<strong>${esc(name)}</strong><br/><span class="pill">No data</span>`
-            : `<strong>${esc(name)}</strong><br/><span class="pill">${val} national holidays</span>`;
+            : `<strong>${esc(name)}</strong><br/><span class="pill">${count} national holidays</span>`;
         }
       },
 
