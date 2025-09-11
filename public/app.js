@@ -483,8 +483,12 @@ function buildNameToIso2() {
           if (CURRENT_VIEW === 'today') {
             const list = TODAY_ITEMS_MAP.get(iso2) || []; // array of holiday names today
             if (!list.length) {
-              return `<strong>${esc(name)}</strong><br/><span class="pill">No holiday today</span>`;
+              return `<strong>${esc(name)}</strong><br/><span class="pill">No national holiday today</span>`;
             }
+            // Fallback in case TODAY_PRETTY_DATE wasn't set yet
+            const pretty = TODAY_PRETTY_DATE || new Date().toLocaleDateString(undefined, {
+              weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
+            });
             const lines = list.map(nm => `${esc(TODAY_PRETTY_DATE)} — ${esc(nm)}`).join('<br/>');
             return `<strong>${esc(name)}</strong><br/>${lines}`;
           }
@@ -755,8 +759,8 @@ function buildNameToIso2() {
         colorAxis: {
           dataClassColor: 'category',
           dataClasses: [
-            { to: 0, color: '#d9d9d9', name: 'No holiday today' },
-            { from: 1, color: '#0b3d91', name: 'Holiday today' }
+            { to: 0, color: '#d9d9d9', name: 'No national holiday today' },
+            { from: 1, color: '#0b3d91', name: 'National Holiday today' }
           ],
           nullColor: '#d9d9d9'
         }
