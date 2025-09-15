@@ -663,12 +663,12 @@ function buildNameToIso2() {
         allAreas: true,
 
         // Thin borders always (even when "selected")
-        borderWidth: 0,
-        borderColor: 'transparent',
+        borderWidth: 1,
+        borderColor: '#2b2b2b',
 
         states: {
-          hover:  { color: '#ffe082', brightness: 0.10, borderWidth: 0.15, borderColor: '#000', animation: { duration: 0 }, halo: false },
-          select: { brightness: 0,    borderWidth: 0.15, borderColor: '#000' }
+          hover:  { color: '#ffe082', brightness: 0.10, animation: { duration: 0 }, halo: false },
+          select: { brightness: 0, }
         },
 
         dataLabels: { enabled: false },
@@ -713,81 +713,39 @@ function buildNameToIso2() {
       }]
     });
 
-    // === Thin, crisp global borders that stay visually consistent ===
-    // Drop-in replacement for your previous mapline + redraw block.
-
-    const BORDER_MIN = 0.35;   // never thinner than this (px)
-    const BORDER_MAX = 2.2;    // never thicker than this (px)
-
-    // Compute a base width that adapts to chart size (thinner on small/mobile)
+    // === Adaptive polygon border width (scales on mobile & zoom) ===
     function computeBaseBorderWidth(c) {
-      const pw = c?.plotWidth || c?.chartWidth || 800;
-      // ~0.14% of plot width, clamped to [0.8px, 1.8px] at default zoom
-      const adaptive = pw * 0.0014;
-      return Math.max(0.8, Math.min(1.8, adaptive));
+      const pw = c?.plotWidth  || 800;
+      const ph = c?.plotHeight || 500;
+      const shorter = Math.min(pw, ph);
+
+      // ~0.14% of shorter dimension; tweak 0.0014 to taste
+      const w = shorter * 0.0014;
+
+      // keep it within a sensible range
+      return Math.max(0.6, Math.min(1.8, w));
     }
 
-    // === Global borders that stay consistent at any zoom ===
-    // Drop-in replacement for your previous mapline + redraw block.
-
-    const borderLines = Highcharts.geojson(topology, 'mapline');
-
-    // base width that adapts to chart size (NOT to zoom)
-    function baseBorderWidth(c) {
-      const pw = c?.plotWidth || 800;      // pixels
-      // ~0.13% of plot width, clamped
-      const adaptive = pw * 0.0013;
-      return Math.max(0.7, Math.min(1.6, adaptive));
-    }
-
-    chart.addSeries({
-      id: 'borders',
-      type: 'mapline',
-      data: borderLines,
-      color: '#2b2b2b',                    // tweak to taste
-      lineWidth: baseBorderWidth(chart),
-      enableMouseTracking: false,
-      showInLegend: false,
-      zIndex: 6,
-      className: 'ha-borders'              // for CSS hook below
-    }, false);
-
-    // Ensure the border stroke does NOT scale with zoom transforms
-    function applyNonScalingStroke() {
-      const s = chart.get('borders');
+    function applyAdaptiveBorders() {
+      const bw = computeBaseBorderWidth(chart);
+      const s  = chart.series && chart.series[0];
       if (!s) return;
-      // apply to the series group and each path
-      if (s.group && s.group.element) {
-        s.group.element.style.vectorEffect = 'non-scaling-stroke';
-      }
-      (s.points || []).forEach(p => {
-        if (p.graphic && p.graphic.element) {
-          p.graphic.element.style.vectorEffect = 'non-scaling-stroke';
+
+      // Set base border and make states inherit it
+      s.update({
+        borderWidth: bw,
+        states: {
+          hover:  { borderWidth: bw, borderColor: '#2b2b2b' },
+          select: { borderWidth: bw, borderColor: '#2b2b2b' }
         }
-      });
+      }, false);
+      chart.redraw();
     }
 
-    // Recompute width on reflow/resizes; keep vector-effect applied
-    function syncBorders() {
-      const s = chart.get('borders');
-      if (!s) return;
-      s.update({ lineWidth: baseBorderWidth(chart) }, false);
-      applyNonScalingStroke();
-    }
-
-    // Run now and on any redraw/reflow
-    applyNonScalingStroke();
-    syncBorders();
-    chart.update({
-      chart: {
-        events: {
-          load:   function () { syncBorders(); },
-          redraw: function () { syncBorders(); }
-        }
-      }
-    }, false);
-
-    chart.redraw();
+        // run now and whenever the chart redraws (resize/zoom)
+    applyAdaptiveBorders();
+    Highcharts.addEvent(chart, 'load',   applyAdaptiveBorders);
+    Highcharts.addEvent(chart, 'redraw', applyAdaptiveBorders);
 
     // --- Selection helpers (no overlay; pure point.color override) ---
     function applySelection(point, keyUpper) {
