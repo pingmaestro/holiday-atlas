@@ -221,8 +221,9 @@ function buildNameToIso2() {
     }
   }
 
-  // ---- Calendar renderer ----
-  function renderCalendarHTML(year, holidays, longWeekendDates) {
+  // ---- Calendar renderer (12-month year grid) ----
+  function renderCalendarHTML(year, holidays, longWeekendDates /* Set<string> yyyy-mm-dd */) {
+    // Map yyyy-mm-dd -> [holiday names]
     const holidayMap = new Map();
     holidays.forEach(h => {
       const d = h.date;
@@ -230,12 +231,16 @@ function buildNameToIso2() {
       holidayMap.get(d).push(h.name || h.localName || 'Holiday');
     });
 
+    // Local "today" parts
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayY = now.getFullYear();
+    const todayM = now.getMonth(); // 0..11
+    const todayD = now.getDate();
+
     const monthNames = Array.from({ length: 12 }, (_, i) =>
       new Date(year, i, 1).toLocaleString(undefined, { month: 'long' })
     );
-    const dow = ['S','M','T','W','T','F','S'];
+    const dow = ['S','M','T','W','T','F','S']; // Sunday-start
 
     const months = monthNames.map((mn, mIdx) => {
       const first = new Date(year, mIdx, 1);
@@ -253,24 +258,31 @@ function buildNameToIso2() {
         const key = `${yyyy}-${mm}-${dd}`;
 
         const isHoliday = holidayMap.has(key);
-        const isPast = dLocal < today;
-        const inLW = longWeekendDates && longWeekendDates.has(key);
+        const isToday  = (yyyy === todayY && mIdx === todayM && day === todayD);
+        const isPast   = dLocal < new Date(todayY, todayM, todayD); // local midnight compare
+        const inLW     = longWeekendDates && longWeekendDates.has(key);
 
         const names = isHoliday ? holidayMap.get(key) : [];
         const longDate = dLocal.toLocaleDateString(undefined, { weekday:'short', year:'numeric', month:'long', day:'numeric' });
 
+        // Tooltip text
         let tip = longDate;
+        if (isToday) tip += ' • Today';
         if (names.length) tip += ` — ${names.join(', ')}`;
         if (inLW) tip += names.length ? ' • Long Weekend' : ' — Long Weekend';
 
         const classes = [
           'cal-day',
           isHoliday ? 'holiday' : '',
-          isPast ? 'past' : '',
-          inLW ? 'lw' : ''
+          isPast && !isToday ? 'past' : '',
+          inLW ? 'lw' : '',
+          isToday ? 'today' : ''
         ].filter(Boolean).join(' ');
 
-        return `<div class="${classes}" data-tip="${esc(tip)}" aria-label="${esc(tip)}" tabindex="0">${day}</div>`;
+        // Use aria-current for accessibility when it's today
+        const ariaCurrent = isToday ? ' aria-current="date"' : '';
+
+        return `<div class="${classes}"${ariaCurrent} data-tip="${esc(tip)}" aria-label="${esc(tip)}" tabindex="0">${day}</div>`;
       });
 
       return `
@@ -286,6 +298,7 @@ function buildNameToIso2() {
 
     return `<div class="year-cal">${months}</div>`;
   }
+
 
   // ---- Lightweight calendar tooltip ----
   let calTipEl = null;
@@ -701,32 +714,59 @@ function buildNameToIso2() {
       }]
     });
 
-    // === Thin, crisp global borders that SCALE with zoom ===
-    const BORDER_BASE_WIDTH = 1.4; // px at default zoom; tweak to taste
-    const borderLines = Highcharts.geojson(topology, 'mapline');
+    // === Thin, crisp global borders that stay visually consistent ===
+    // Drop-in replacement for your previous mapline + redraw block.
 
+    const BORDER_MIN = 0.35;   // never thinner than this (px)
+    const BORDER_MAX = 2.2;    // never thicker than this (px)
+
+    // Compute a base width that adapts to chart size (thinner on small/mobile)
+    function computeBaseBorderWidth(c) {
+      const pw = c?.plotWidth || c?.chartWidth || 800;
+      // ~0.14% of plot width, clamped to [0.8px, 1.8px] at default zoom
+      const adaptive = pw * 0.0014;
+      return Math.max(0.8, Math.min(1.8, adaptive));
+    }
+
+    // Add the global border layer once
+    const borderLines = Highcharts.geojson(topology, 'mapline');
     chart.addSeries({
       id: 'borders',
       type: 'mapline',
       data: borderLines,
-      color: '#cfd7e6',          // border color
-      lineWidth: BORDER_BASE_WIDTH,
+      color: '#cfd7e6',
+      lineWidth: computeBaseBorderWidth(chart), // initial guess
       enableMouseTracking: false,
       showInLegend: false,
       zIndex: 6
     }, false);
 
-    // Keep mapline stroke width visually constant as you zoom/pan/resize
+    // Keep border thickness stable across zoom/pan/resize
     function syncBorderWidth() {
       const s = chart.get('borders');
-      const scale = chart.mapView && chart.mapView.getScale ? chart.mapView.getScale() : 1;
-      if (s && s.update) s.update({ lineWidth: BORDER_BASE_WIDTH / (scale || 1) }, false);
+      if (!s) return;
+
+      const scale = (chart.mapView && chart.mapView.getScale && chart.mapView.getScale()) || 1;
+      const base  = computeBaseBorderWidth(chart);
+
+      // Scale with zoom, clamp to avoid disappearing or chunkiness
+      const lw = Math.max(BORDER_MIN, Math.min(BORDER_MAX, base / scale));
+
+      // Update without redrawing the whole world each time
+      s.update({ lineWidth: lw }, false);
     }
 
-    // Run once now, and on every redraw (zoom/pan/responsive)
+    // Run once now…
     syncBorderWidth();
+
+    // …and keep in sync on any redraw (zoom/pan/reflow/resize)
     chart.update({
-      chart: { events: { redraw: syncBorderWidth } }
+      chart: {
+        events: {
+          redraw: syncBorderWidth,
+          load:   syncBorderWidth
+        }
+      }
     }, false);
 
     chart.redraw();
