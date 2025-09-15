@@ -260,6 +260,10 @@ header {
   border-top-color: #111827;
 }
 
+.highcharts-series.ha-borders path {
+  vector-effect: non-scaling-stroke;
+}
+
 /* Mobile tweak */
 @media (max-width: 720px) {
   .year-cal { grid-template-columns: repeat(2, 1fr); }

@@ -663,13 +663,12 @@ function buildNameToIso2() {
         allAreas: true,
 
         // Thin borders always (even when "selected")
-        borderColor: '#000',
-        borderWidth: 0.15,
-        allowPointSelect: false, // we control highlight via point.color
+        borderWidth: 0,
+        borderColor: 'transparent',
 
         states: {
-          hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.15, borderColor: '#000', brightness: 0.10 },
-          select: { borderWidth: 0.15, borderColor: '#000', brightness: 0 }
+          hover:  { color: '#ffe082', brightness: 0.10, borderWidth: 0.15, borderColor: '#000', animation: { duration: 0 }, halo: false },
+          select: { brightness: 0,    borderWidth: 0.15, borderColor: '#000' }
         },
 
         dataLabels: { enabled: false },
@@ -728,43 +727,62 @@ function buildNameToIso2() {
       return Math.max(0.8, Math.min(1.8, adaptive));
     }
 
-    // Add the global border layer once
+    // === Global borders that stay consistent at any zoom ===
+    // Drop-in replacement for your previous mapline + redraw block.
+
     const borderLines = Highcharts.geojson(topology, 'mapline');
+
+    // base width that adapts to chart size (NOT to zoom)
+    function baseBorderWidth(c) {
+      const pw = c?.plotWidth || 800;      // pixels
+      // ~0.13% of plot width, clamped
+      const adaptive = pw * 0.0013;
+      return Math.max(0.7, Math.min(1.6, adaptive));
+    }
+
     chart.addSeries({
       id: 'borders',
       type: 'mapline',
       data: borderLines,
-      color: '#cfd7e6',
-      lineWidth: computeBaseBorderWidth(chart), // initial guess
+      color: '#2b2b2b',                    // tweak to taste
+      lineWidth: baseBorderWidth(chart),
       enableMouseTracking: false,
       showInLegend: false,
-      zIndex: 6
+      zIndex: 6,
+      className: 'ha-borders'              // for CSS hook below
     }, false);
 
-    // Keep border thickness stable across zoom/pan/resize
-    function syncBorderWidth() {
+    // Ensure the border stroke does NOT scale with zoom transforms
+    function applyNonScalingStroke() {
       const s = chart.get('borders');
       if (!s) return;
-
-      const scale = (chart.mapView && chart.mapView.getScale && chart.mapView.getScale()) || 1;
-      const base  = computeBaseBorderWidth(chart);
-
-      // Scale with zoom, clamp to avoid disappearing or chunkiness
-      const lw = Math.max(BORDER_MIN, Math.min(BORDER_MAX, base / scale));
-
-      // Update without redrawing the whole world each time
-      s.update({ lineWidth: lw }, false);
+      // apply to the series group and each path
+      if (s.group && s.group.element) {
+        s.group.element.style.vectorEffect = 'non-scaling-stroke';
+      }
+      (s.points || []).forEach(p => {
+        if (p.graphic && p.graphic.element) {
+          p.graphic.element.style.vectorEffect = 'non-scaling-stroke';
+        }
+      });
     }
 
-    // Run once now…
-    syncBorderWidth();
+    // Recompute width on reflow/resizes; keep vector-effect applied
+    function syncBorders() {
+      const s = chart.get('borders');
+      if (!s) return;
+      s.update({ lineWidth: baseBorderWidth(chart) }, false);
+      applyNonScalingStroke();
+    }
 
-    // …and keep in sync on any redraw (zoom/pan/reflow/resize)
+    // Run now and on any redraw/reflow
+    applyNonScalingStroke();
+    syncBorders();
     chart.update({
       chart: {
         events: {
-          redraw: syncBorderWidth,
-          load:   syncBorderWidth
+          load:   function () { syncBorders(); },
+          redraw: function () { syncBorders(); }
         }
       }
     }, false);
