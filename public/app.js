@@ -718,31 +718,32 @@ function buildNameToIso2() {
       const pw = c?.plotWidth  || 800;
       const ph = c?.plotHeight || 500;
       const shorter = Math.min(pw, ph);
-
-      // ~0.14% of shorter dimension; tweak 0.0014 to taste
-      const w = shorter * 0.0014;
-
-      // keep it within a sensible range
-      return Math.max(0.6, Math.min(1.8, w));
+      const w = shorter * 0.0014;                 // tweak ratio to taste
+      return Math.max(0.6, Math.min(1.8, w));     // clamp
     }
 
+    let __lastBW = null; // remember last applied width to avoid loops
+
     function applyAdaptiveBorders() {
-      const bw = computeBaseBorderWidth(chart);
-      const s  = chart.series && chart.series[0];
+      const s = chart.series && chart.series[0];
       if (!s) return;
 
-      // Set base border and make states inherit it
+      const bw = computeBaseBorderWidth(chart);
+      // If no meaningful change, do nothing (prevents redraw loops)
+      if (__lastBW !== null && Math.abs(__lastBW - bw) < 0.01) return;
+
       s.update({
         borderWidth: bw,
         states: {
           hover:  { borderWidth: bw, borderColor: '#2b2b2b' },
           select: { borderWidth: bw, borderColor: '#2b2b2b' }
         }
-      }, false);
-      chart.redraw();
+      }, false); // <-- do NOT trigger redraw here
+
+      __lastBW = bw;
     }
 
-        // run now and whenever the chart redraws (resize/zoom)
+    // run now and on redraw/load (zoom/resize trigger redraw)
     applyAdaptiveBorders();
     Highcharts.addEvent(chart, 'load',   applyAdaptiveBorders);
     Highcharts.addEvent(chart, 'redraw', applyAdaptiveBorders);
