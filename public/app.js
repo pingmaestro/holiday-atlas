@@ -701,17 +701,34 @@ function buildNameToIso2() {
       }]
     });
 
-    // Thin, crisp global borders (non-interactive)
+    // === Thin, crisp global borders that SCALE with zoom ===
+    const BORDER_BASE_WIDTH = 1.4; // px at default zoom; tweak to taste
     const borderLines = Highcharts.geojson(topology, 'mapline');
+
     chart.addSeries({
+      id: 'borders',
       type: 'mapline',
       data: borderLines,
-      color: '#cfd7e6',
-      lineWidth: 0.6,
+      color: '#cfd7e6',          // border color
+      lineWidth: BORDER_BASE_WIDTH,
       enableMouseTracking: false,
       showInLegend: false,
       zIndex: 6
     }, false);
+
+    // Keep mapline stroke width visually constant as you zoom/pan/resize
+    function syncBorderWidth() {
+      const s = chart.get('borders');
+      const scale = chart.mapView && chart.mapView.getScale ? chart.mapView.getScale() : 1;
+      if (s && s.update) s.update({ lineWidth: BORDER_BASE_WIDTH / (scale || 1) }, false);
+    }
+
+    // Run once now, and on every redraw (zoom/pan/responsive)
+    syncBorderWidth();
+    chart.update({
+      chart: { events: { redraw: syncBorderWidth } }
+    }, false);
+
     chart.redraw();
 
     // --- Selection helpers (no overlay; pure point.color override) ---
