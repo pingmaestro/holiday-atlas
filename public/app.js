@@ -279,7 +279,6 @@ function buildNameToIso2() {
           isToday ? 'today' : ''
         ].filter(Boolean).join(' ');
 
-        // Use aria-current for accessibility when it's today
         const ariaCurrent = isToday ? ' aria-current="date"' : '';
 
         return `<div class="${classes}"${ariaCurrent} data-tip="${esc(tip)}" aria-label="${esc(tip)}" tabindex="0">${day}</div>`;
@@ -298,7 +297,6 @@ function buildNameToIso2() {
 
     return `<div class="year-cal">${months}</div>`;
   }
-
 
   // ---- Lightweight calendar tooltip ----
   let calTipEl = null;
@@ -364,7 +362,7 @@ function buildNameToIso2() {
       return;
     }
 
-    // --- Calendar view (unchanged) ---
+    // --- Calendar view ---
     if (mode === 'cal') {
       detailsBody.innerHTML = renderCalendarHTML(YEAR, natList, lwDates);
       hideCalTip();
@@ -372,14 +370,10 @@ function buildNameToIso2() {
     }
 
     // --- LIST view: grouped by month + grey out past dates ---
-    // local "today" at midnight
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // Sort all national holidays by date asc
     const sorted = natList.slice().sort((a, b) => parseLocalISODate(a.date) - parseLocalISODate(b.date));
-
-    // Group by month number (0..11)
     const byMonth = new Map();
     for (const h of sorted) {
       const d = parseLocalISODate(h.date);
@@ -388,7 +382,6 @@ function buildNameToIso2() {
       byMonth.get(m).push(h);
     }
 
-    // Build HTML
     const sections = [];
     for (const [m, items] of byMonth) {
       const monthName = new Date(YEAR, m, 1).toLocaleString(undefined, { month: 'long' });
@@ -397,22 +390,18 @@ function buildNameToIso2() {
         const d = parseLocalISODate(h.date);
         const isPast = d < today;
 
-        // Example: "Fri 11/28/2025"
         const pretty = d.toLocaleDateString(undefined, {
           weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit'
         });
 
-        // Primary name + optional local name note
         const primary = esc(h.name || 'Holiday');
         const local   = (h.localName && h.localName !== h.name) ? esc(h.localName) : null;
 
-        // Long weekend tag
         const inLW = lwDates.has(h.date);
         const lwTag = inLW
           ? ` <span class="pill lw" title="This holiday falls within a long weekend">Long Week-End Alert</span>`
           : '';
 
-        // Dim past rows. We add class "past" and also a light inline opacity to guarantee effect.
         const pastCls = isPast ? ' past' : '';
         const pastStyle = isPast ? ' style="opacity:.55"' : '';
 
@@ -439,60 +428,62 @@ function buildNameToIso2() {
     hideCalTip();
   }
 
-    // Helper used by All-Year tooltip to keep hover count consistent
-    function getNatCountForTooltip(iso2, fallbackVal, year) {
-      if (NAT_COUNTS.has(iso2)) return NAT_COUNTS.get(iso2);
-      if (!COUNTS_READY) {
-        // while computing, show something benign (used by tooltip branch)
-        if (Number.isFinite(fallbackVal)) return fallbackVal;
-        if (Number.isFinite(TOTALS?.[iso2]?.national)) return TOTALS[iso2].national;
-        return null;
-      }
+  // Helper used by All-Year tooltip to keep hover count consistent
+  function getNatCountForTooltip(iso2, fallbackVal, year) {
+    if (NAT_COUNTS.has(iso2)) return NAT_COUNTS.get(iso2);
+
+    if (!COUNTS_READY) {
+      if (Number.isFinite(fallbackVal)) return fallbackVal;
+      if (Number.isFinite(TOTALS?.[iso2]?.national)) return TOTALS[iso2].national;
       return null;
     }
 
-    // ---- Region list card & click wiring ----
-    function renderRegionList(iso2) {
-      const anchor = document.getElementById('region-list-anchor');
-      if (!anchor) return;
+    const totalsVal = Number.isFinite(TOTALS?.[iso2]?.national) ? TOTALS[iso2].national : null;
+    return totalsVal;
+  }
 
-      let card = document.getElementById('region-list');
-      if (!card) {
-        card = document.createElement('article');
-        card.id = 'region-list';
-        card.className = 'card';
-        card.innerHTML = `<div><strong>States / Provinces</strong></div><div class="rows" id="region-rows"></div>`;
-        anchor.parentNode.insertBefore(card, anchor.nextSibling);
-      }
+  // ---- Region list card & click wiring ----
+  function renderRegionList(iso2) {
+    const anchor = document.getElementById('region-list-anchor');
+    if (!anchor) return;
 
-      const rows = document.getElementById('region-rows');
-      const m = REGIONS[iso2] || {};
-      const entries = Object.entries(m).sort((a,b) => b[1] - a[1]);
-
-      if (!entries.length) {
-        rows.innerHTML = `<div class="note">No regional breakdown available.</div>`;
-        return;
-      }
-
-      rows.innerHTML = entries.map(([code, count]) => `
-        <div class="row region-row" data-code="${esc(code)}" style="cursor:pointer">
-          <div class="cell">${esc(code)}</div>
-          <div class="cell"><span class="pill">${count} regional</span></div>
-        </div>
-      `).join('');
-
-      rows.querySelectorAll('.region-row').forEach(el => {
-        const code = el.getAttribute('data-code');
-        el.title = `${code}: ${m[code]} regional holidays`;
-        el.addEventListener('click', async (evt) => {
-          evt.preventDefault();
-          const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
-          const countryName = (TOTALS[iso2]?.name) || iso2;
-          await renderDetails(iso2, countryName, holidays, code, CURRENT_MODE); // still national-only in panel
-          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-        });
-      });
+    let card = document.getElementById('region-list');
+    if (!card) {
+      card = document.createElement('article');
+      card.id = 'region-list';
+      card.className = 'card';
+      card.innerHTML = `<div><strong>States / Provinces</strong></div><div class="rows" id="region-rows"></div>`;
+      anchor.parentNode.insertBefore(card, anchor.nextSibling);
     }
+
+    const rows = document.getElementById('region-rows');
+    const m = REGIONS[iso2] || {};
+    const entries = Object.entries(m).sort((a,b) => b[1] - a[1]);
+
+    if (!entries.length) {
+      rows.innerHTML = `<div class="note">No regional breakdown available.</div>`;
+      return;
+    }
+
+    rows.innerHTML = entries.map(([code, count]) => `
+      <div class="row region-row" data-code="${esc(code)}" style="cursor:pointer">
+        <div class="cell">${esc(code)}</div>
+        <div class="cell"><span class="pill">${count} regional</span></div>
+      </div>
+    `).join('');
+
+    rows.querySelectorAll('.region-row').forEach(el => {
+      const code = el.getAttribute('data-code');
+      el.title = `${code}: ${m[code]} regional holidays`;
+      el.addEventListener('click', async (evt) => {
+        evt.preventDefault();
+        const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
+        const countryName = (TOTALS[iso2]?.name) || iso2;
+        await renderDetails(iso2, countryName, holidays, code, CURRENT_MODE); // still national-only in panel
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      });
+    });
+  }
 
   // ---- Main init ----
   try {
@@ -662,13 +653,13 @@ function buildNameToIso2() {
         joinBy: ['hc-key','hc-key'],
         allAreas: true,
 
-        // Thin borders always (even when "selected")
+        // Adaptive polygon borders (we’ll update width after init)
         borderWidth: 1,
         borderColor: '#2b2b2b',
 
         states: {
           hover:  { color: '#ffe082', brightness: 0.10, animation: { duration: 0 }, halo: false },
-          select: { brightness: 0, }
+          select: { brightness: 0 }
         },
 
         dataLabels: { enabled: false },
@@ -687,7 +678,7 @@ function buildNameToIso2() {
               this.setState();
             },
             click: async function () {
-              // Only All Year opens the panel; block until counts ready (so hover and list agree)
+              // Only All Year opens the panel; wait until counts ready (so hover and list agree)
               if (CURRENT_VIEW !== 'all' || !COUNTS_READY) return;
 
               const hcKey = (this.options['hc-key'] || this['hc-key'] || '').toUpperCase();
@@ -718,32 +709,24 @@ function buildNameToIso2() {
       const pw = c?.plotWidth  || 800;
       const ph = c?.plotHeight || 500;
       const shorter = Math.min(pw, ph);
-      const w = shorter * 0.0014;                 // tweak ratio to taste
-      return Math.max(0.6, Math.min(1.8, w));     // clamp
+      const w = shorter * 0.0014;
+      return Math.max(0.6, Math.min(1.8, w));
     }
-
-    let __lastBW = null; // remember last applied width to avoid loops
-
+    let __lastBW = null;
     function applyAdaptiveBorders() {
       const s = chart.series && chart.series[0];
       if (!s) return;
-
       const bw = computeBaseBorderWidth(chart);
-      // If no meaningful change, do nothing (prevents redraw loops)
       if (__lastBW !== null && Math.abs(__lastBW - bw) < 0.01) return;
-
       s.update({
         borderWidth: bw,
         states: {
           hover:  { borderWidth: bw, borderColor: '#2b2b2b' },
           select: { borderWidth: bw, borderColor: '#2b2b2b' }
         }
-      }, false); // <-- do NOT trigger redraw here
-
+      }, false);
       __lastBW = bw;
     }
-
-    // run now and on redraw/load (zoom/resize trigger redraw)
     applyAdaptiveBorders();
     Highcharts.addEvent(chart, 'load',   applyAdaptiveBorders);
     Highcharts.addEvent(chart, 'redraw', applyAdaptiveBorders);
@@ -751,7 +734,7 @@ function buildNameToIso2() {
     // --- Selection helpers (no overlay; pure point.color override) ---
     function applySelection(point, keyUpper) {
       if (SELECTED_POINT && SELECTED_POINT.update) {
-        SELECTED_POINT.update({ color: null }, false); // back to colorAxis
+        SELECTED_POINT.update({ color: null }, false);
       }
       point.update({ color: '#ffc54d' }, false);
       chart.redraw();
@@ -779,7 +762,7 @@ function buildNameToIso2() {
     // === PRECOMPUTE: lock interactions, compute All-Year counts, then apply ===
     chart.update({ plotOptions: { series: { enableMouseTracking: false, cursor: 'default' } } }, false);
     setLoading(true, 'Computing national counts…');
-    let ALL_DATA = rows.slice(); // defined here so helpers can see it
+    let ALL_DATA = rows.slice();
 
     try {
       await precomputeAllNatCounts(YEAR);
@@ -791,15 +774,9 @@ function buildNameToIso2() {
     }
 
     // Expose a painter so Next 7/30 can color the map as a choropleth by holiday COUNT
-    // Accepts:
-    //  - iso2UpperList: string[] (countries that have >=1 holiday in the window)
-    //  - itemsFlat:     { iso2, name, date }[] for tooltips
-    //  - countsByIso2:  Map<string, number> OR plain object { CA: 5, FR: 2, ... }
     window.haColorCountries = function (iso2UpperList, itemsFlat = [], countsByIso2 = new Map()) {
-      // Clear any All-Year highlight when painting Next-N
       clearSelectionColor();
 
-      // Build tooltip map for the range: ISO2 -> [{date, name}, ...]
       RANGE_ITEMS_MAP = new Map();
       (itemsFlat || []).forEach(x => {
         const k = String(x.iso2 || '').toUpperCase().slice(0, 2);
@@ -807,7 +784,6 @@ function buildNameToIso2() {
         RANGE_ITEMS_MAP.get(k).push({ date: String(x.date), name: x.name });
       });
 
-      // Normalize counts map (accept Map or plain object)
       const countsMap = countsByIso2 instanceof Map
         ? countsByIso2
         : new Map(Object.entries(countsByIso2 || {}).map(([k, v]) => [String(k).toUpperCase().slice(0,2), Number(v) || 0]));
@@ -817,12 +793,10 @@ function buildNameToIso2() {
       const data = mapData.map(p => {
         const keyLc = String(p && (p['hc-key'] || p.hckey || p.key) || '').toLowerCase();
         const iso2 = keyLc.toUpperCase();
-        // prefer explicit count if present; otherwise treat as 1 for any marked country
         const count = countsMap.has(iso2) ? (countsMap.get(iso2) || 0) : (lcSet.has(keyLc) ? 1 : 0);
         return [keyLc, count > 0 ? count : null, (TOTALS[iso2]?.name) || iso2];
       });
 
-      // Choropleth classes by COUNT within the window
       chart.update({
         colorAxis: {
           dataClassColor: 'category',
@@ -840,7 +814,7 @@ function buildNameToIso2() {
 
       CURRENT_VIEW = 'range';
       showDetailsTabs(false);
-      setDetailsPanelVisible(false); // hide everything under the map in range views
+      setDetailsPanelVisible(false);
     };
 
     // ---- View tags (All Year / Today) ----
@@ -899,7 +873,6 @@ function buildNameToIso2() {
           colorAxis: { dataClasses: ALL_COLOR_CLASSES, dataClassColor: 'category', nullColor: '#d9d9d9' }
         }, false);
 
-        // Use the precomputed NAT_COUNTS to populate ALL view data
         const mapData = chart.series[0].mapData || [];
         const data = mapData.map(p => {
           const keyLc = String(p && (p['hc-key'] || p.hckey || p.key) || '').toLowerCase();
@@ -931,7 +904,7 @@ function buildNameToIso2() {
         weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
       });
 
-      const todayList = await fetchTodaySet(YEAR); // unique ISO2 upper
+      const todayList = await fetchTodaySet(YEAR);
       const todaySet = new Set(todayList.map(c => c.toLowerCase()));
 
       const mapData = chart.series[0].mapData || [];
@@ -980,7 +953,6 @@ function buildNameToIso2() {
     return isoUTC(new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate())));
   }
 
-  // (Kept for completeness, but we won't render the list in ranges anymore)
   function renderDetailsByDate(_byDate, _titleNote) {}
 
   async function fetchDay(dateISO) {
@@ -1002,11 +974,8 @@ function buildNameToIso2() {
 
       const results = await Promise.all(dates.map(fetchDay));
 
-      // Flat items with date for tooltips
       const iso2Set = new Set();
       const itemsFlat = [];
-
-      // Count total holidays per country in the window
       const counts = new Map();
 
       results.forEach(r => {
@@ -1022,7 +991,6 @@ function buildNameToIso2() {
       });
 
       if (typeof window.haColorCountries === 'function') {
-        // Paint choropleth with counts & provide items for tooltips
         window.haColorCountries(Array.from(iso2Set).sort(), itemsFlat, counts);
       }
     } catch (e) {
@@ -1030,7 +998,6 @@ function buildNameToIso2() {
     }
   }
 
-  // Wire buttons; stop parent tab handler from hijacking the click
   function setActive(btn) {
     document.querySelectorAll('.view-tag').forEach(b => b.classList.remove('is-active'));
     btn?.classList.add('is-active');

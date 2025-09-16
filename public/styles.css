@@ -192,11 +192,11 @@ header {
 
 /* Highlight today's cell in the calendar */
 .cal-day.today {
-  background: #ffe082;        /* yellow */
+  background: #ffe082;
   color: #000;
   font-weight: 600;
   outline: 1px solid rgba(0,0,0,.15);
-  border-radius: 6px;         /* match your calendar cell radius if any */
+  border-radius: 6px;
 }
 
 /* If today is also a holiday, keep the highlight strong */
@@ -260,7 +260,7 @@ header {
   border-top-color: #111827;
 }
 
-.highcharts-series.ha-borders path {
+.highcharts-series.nonScaleBorders path {
   vector-effect: non-scaling-stroke;
 }
 
