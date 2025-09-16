@@ -704,32 +704,57 @@ function buildNameToIso2() {
       }]
     });
 
-    // === Adaptive polygon border width (scales on mobile & zoom) ===
-    function computeBaseBorderWidth(c) {
-      const pw = c?.plotWidth  || 800;
-      const ph = c?.plotHeight || 500;
-      const shorter = Math.min(pw, ph);
-      const w = shorter * 0.0014;
-      return Math.max(0.6, Math.min(1.8, w));
-    }
-    let __lastBW = null;
-    function applyAdaptiveBorders() {
-      const s = chart.series && chart.series[0];
-      if (!s) return;
-      const bw = computeBaseBorderWidth(chart);
-      if (__lastBW !== null && Math.abs(__lastBW - bw) < 0.01) return;
-      s.update({
-        borderWidth: bw,
+    // --- OUTLINE SERIES (crisp borders we can scale a bit) ---
+    const outline = Highcharts.geojson(topology, 'mapline');
+    const outlineSeries = chart.addSeries({
+      type: 'mapline',
+      data: outline,
+      color: '#2b2b2b',
+      lineWidth: 0.8,                 // will be adjusted by adaptOutline()
+      zIndex: 6,
+      enableMouseTracking: false,
+      showInLegend: false
+    }, false);
+
+    // Keep polygon borders thin; outline does the visual work
+    chart.series[0].update({
+      borderColor: '#2b2b2b',
+      borderWidth: 0.35,
+      states: {
+        hover:  { borderWidth: 0.35, borderColor: '#2b2b2b' },
+        select: { borderWidth: 0.35, borderColor: '#2b2b2b' }
+      }
+    }, false);
+    chart.redraw();
+
+    // Scale outline width slightly with zoom + container size
+    function adaptOutline() {
+      const mv = chart.mapView;
+      const scale = mv && mv.getSVGTransform ? (mv.getSVGTransform().scaleX || 1) : 1;
+
+      // Base on shorter plot edge, then nudge with zoom (very gentle exponent)
+      const shorter = Math.min(chart.plotWidth || 800, chart.plotHeight || 500);
+      const base = Math.max(0.5, Math.min(1.2, shorter * 0.001));     // 0.5–1.2px
+      const lw   = Math.max(0.4, Math.min(1.8, base * Math.pow(scale, 0.15)));
+
+      // Update outline thickness
+      outlineSeries.update({ lineWidth: lw }, false);
+
+      // Keep polygon borders subtle so they never look “thicc”
+      const poly = Math.max(0.2, Math.min(0.6, lw * 0.45));
+      chart.series[0].update({
+        borderWidth: poly,
         states: {
-          hover:  { borderWidth: bw, borderColor: '#2b2b2b' },
-          select: { borderWidth: bw, borderColor: '#2b2b2b' }
+          hover:  { borderWidth: poly, borderColor: '#2b2b2b' },
+          select: { borderWidth: poly, borderColor: '#2b2b2b' }
         }
       }, false);
-      __lastBW = bw;
     }
-    applyAdaptiveBorders();
-    Highcharts.addEvent(chart, 'load',   applyAdaptiveBorders);
-    Highcharts.addEvent(chart, 'redraw', applyAdaptiveBorders);
+
+    // Run now and whenever the map size/zoom changes
+    adaptOutline();
+    Highcharts.addEvent(chart, 'redraw', adaptOutline);
+    if (chart.mapView) Highcharts.addEvent(chart.mapView, 'afterSetExtremes', adaptOutline);
 
     // --- Selection helpers (no overlay; pure point.color override) ---
     function applySelection(point, keyUpper) {
