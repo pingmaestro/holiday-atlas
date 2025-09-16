@@ -40,9 +40,8 @@ function buildNameToIso2() {
   let CURRENT_DETAILS = null;          // { iso2, displayName, holidays, regionCode }
   let TODAY_PRETTY_DATE = '';
 
-  // All-Year selection via per-point color
+  // All-Year selection via native point.select
   let SELECTED_KEY = null;     // 'CA', 'FR', ...
-  let SELECTED_POINT = null;   // Highcharts point
 
   // Tooltip sources for non-All-Year views
   let TODAY_ITEMS_MAP = new Map(); // ISO2 -> [holiday names today]
@@ -638,6 +637,7 @@ function buildNameToIso2() {
             hover:  { animation: { duration: 0 }, halo: false },
             inactive: { opacity: 1 }
           },
+          stickyTracking: true,               // keeps hover stable; no paint trails
           animation: false,
           nullInteraction: true,
           enableMouseTracking: true,
@@ -656,10 +656,12 @@ function buildNameToIso2() {
         // Adaptive polygon borders (we’ll update width after init)
         borderWidth: 1,
         borderColor: '#2b2b2b',
-        allowPointSelect: false, 
+
+        // === HOVER/COLOR RULES ===
+        allowPointSelect: true,                      // click selects
         states: {
-          hover:  { color: '#ffe082', brightness: 0.10, animation: { duration: 0 }, halo: false },
-          select: { enabled: false }
+          hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false },  // yellow hover (temporary)
+          select: { enabled: true, color: '#ffc54d' }                              // yellow on click (persistent)
         },
 
         dataLabels: { enabled: false },
@@ -667,26 +669,22 @@ function buildNameToIso2() {
 
         point: {
           events: {
-            mouseOver: function () {
-              const c = this.series.chart;
-              c.tooltip.refresh(this);
-              this.setState('hover');
-            },
-            mouseOut: function () {
-              const c = this.series.chart;
-              c.tooltip.hide(0);
-              this.setState();
-            },
+            // No manual hover handlers — let Highcharts manage hover.
             click: async function () {
               // Only All Year opens the panel; wait until counts ready (so hover and list agree)
               if (CURRENT_VIEW !== 'all' || !COUNTS_READY) return;
+
+              // Single-select behavior: deselect others, then select this one.
+              const s = this.series;
+              s.points.forEach(p => { if (p.selected) p.select(false, false); });
+              this.select(true, false);
 
               const hcKey = (this.options['hc-key'] || this['hc-key'] || '').toUpperCase();
               const iso2  = hcKey;
               const display = (TOTALS[iso2]?.name) || this.name || iso2;
 
-              // Paint this country only (yellow). Keep others as-is.
-              applySelection(this, hcKey);
+              // store for re-apply on view switches
+              SELECTED_KEY = hcKey;
 
               try {
                 const holidays = await getCountryDetails(iso2);
@@ -774,22 +772,11 @@ function buildNameToIso2() {
     Highcharts.addEvent(chart, 'redraw', adaptOutline);
     if (chart.mapView) Highcharts.addEvent(chart.mapView, 'afterSetExtremes', adaptOutline);
 
-
-    // --- Selection helpers (no overlay; pure point.color override) ---
-    function applySelection(point, keyUpper) {
-      if (SELECTED_POINT && SELECTED_POINT.update) {
-        SELECTED_POINT.update({ color: null }, false);
-      }
-      point.update({ color: '#ffc54d' }, false);
-      chart.redraw();
-      SELECTED_POINT = point;
-      SELECTED_KEY = keyUpper;
-    }
-    function clearSelectionColor() {
-      if (SELECTED_POINT && SELECTED_POINT.update) {
-        SELECTED_POINT.update({ color: null }, false);
-        chart.redraw();
-      }
+    // --- Selection helpers (native select/deselect; no manual color) ---
+    function deselectAll() {
+      const s = chart.series?.[0];
+      if (!s?.points?.length) return;
+      s.points.forEach(p => { if (p.selected) p.select(false, false); });
     }
     function reapplySelectionIfAllYear() {
       if (CURRENT_VIEW !== 'all' || !SELECTED_KEY) return;
@@ -799,8 +786,10 @@ function buildNameToIso2() {
         (p.options && (p.options['hc-key'] || p.options.hckey || p.options.key)) ||
         p['hc-key'] || p.key || ''
       ).toUpperCase() === SELECTED_KEY);
-      if (pt) applySelection(pt, SELECTED_KEY);
-      else SELECTED_POINT = null;
+      if (pt) {
+        deselectAll();
+        pt.select(true, false);
+      }
     }
 
     // === PRECOMPUTE: lock interactions, compute All-Year counts, then apply ===
@@ -819,7 +808,7 @@ function buildNameToIso2() {
 
     // Expose a painter so Next 7/30 can color the map as a choropleth by holiday COUNT
     window.haColorCountries = function (iso2UpperList, itemsFlat = [], countsByIso2 = new Map()) {
-      clearSelectionColor();
+      deselectAll();
 
       RANGE_ITEMS_MAP = new Map();
       (itemsFlat || []).forEach(x => {
@@ -929,12 +918,12 @@ function buildNameToIso2() {
         chart.redraw();
         setDetailsPanelVisible(true);
         showDetailsTabs(true);
-        reapplySelectionIfAllYear();
+        reapplySelectionIfAllYear(); // reselect previously clicked country
         return;
       }
 
       // --- TODAY ---
-      clearSelectionColor();
+      deselectAll();
       setDetailsPanelVisible(false);
       showDetailsTabs(false);
 
