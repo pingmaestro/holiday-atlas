@@ -709,44 +709,62 @@ function buildNameToIso2() {
     const outlineSeries = chart.addSeries({
       type: 'mapline',
       data: outline,
-      color: '#2b2b2b',
-      lineWidth: 0.8,                 // will be adjusted by adaptOutline()
+      color: '#3a3a3a',      // slightly softer than pure black
+      lineWidth: 0.6,        // will be adjusted by adaptOutline()
       zIndex: 6,
       enableMouseTracking: false,
       showInLegend: false
     }, false);
 
-    // Keep polygon borders thin; outline does the visual work
+    // Keep polygon borders ultra-thin; outline provides the visible edge
     chart.series[0].update({
-      borderColor: '#2b2b2b',
-      borderWidth: 0.35,
+      borderColor: '#3a3a3a',
+      borderWidth: 0.3,
       states: {
-        hover:  { borderWidth: 0.35, borderColor: '#2b2b2b' },
-        select: { borderWidth: 0.35, borderColor: '#2b2b2b' }
+        hover:  { borderWidth: 0.3, borderColor: '#3a3a3a' },
+        select: { borderWidth: 0.3, borderColor: '#3a3a3a' }
       }
     }, false);
     chart.redraw();
 
-    // Scale outline width slightly with zoom + container size
+    // Scales outline width gently with zoom + container size + DPR
     function adaptOutline() {
       const mv = chart.mapView;
       const scale = mv && mv.getSVGTransform ? (mv.getSVGTransform().scaleX || 1) : 1;
 
-      // Base on shorter plot edge, then nudge with zoom (very gentle exponent)
-      const shorter = Math.min(chart.plotWidth || 800, chart.plotHeight || 500);
-      const base = Math.max(0.5, Math.min(1.2, shorter * 0.001));     // 0.5–1.2px
-      const lw   = Math.max(0.4, Math.min(1.8, base * Math.pow(scale, 0.15)));
+      // Real pixels of the container (not just plot area) help for mobile
+      const el = chart.renderTo;
+      const cw = (el && el.clientWidth)  || chart.plotWidth  || 800;
+      const ch = (el && el.clientHeight) || chart.plotHeight || 500;
+      const shorter = Math.min(cw, ch);
 
-      // Update outline thickness
+      // Device-pixel ratio: borders feel thicker on high-DPR displays
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+
+      // Base from container size (smaller than before)
+      let base = shorter * 0.0008;               // ~0.4–0.8px typical
+      // Additional reductions on narrow screens
+      if (cw <= 420) base *= 0.70;
+      if (cw <= 360) base *= 0.60;
+
+      // Gentle zoom response (very small exponent keeps it subtle)
+      let lw = base * Math.pow(scale, 0.08);
+
+      // Compensate for high-DPR (divide, but not too aggressively)
+      lw = lw / (dpr * 0.9);
+
+      // Clamp to a tight range so it never becomes “marker pen”
+      lw = Math.max(0.28, Math.min(1.20, lw));
+
       outlineSeries.update({ lineWidth: lw }, false);
 
-      // Keep polygon borders subtle so they never look “thicc”
-      const poly = Math.max(0.2, Math.min(0.6, lw * 0.45));
+      // Polygons: keep a faint inner stroke so gaps don't show when edges meet
+      const poly = Math.max(0.16, Math.min(0.50, lw * 0.40));
       chart.series[0].update({
         borderWidth: poly,
         states: {
-          hover:  { borderWidth: poly, borderColor: '#2b2b2b' },
-          select: { borderWidth: poly, borderColor: '#2b2b2b' }
+          hover:  { borderWidth: poly, borderColor: '#3a3a3a' },
+          select: { borderWidth: poly, borderColor: '#3a3a3a' }
         }
       }, false);
     }
@@ -755,6 +773,7 @@ function buildNameToIso2() {
     adaptOutline();
     Highcharts.addEvent(chart, 'redraw', adaptOutline);
     if (chart.mapView) Highcharts.addEvent(chart.mapView, 'afterSetExtremes', adaptOutline);
+
 
     // --- Selection helpers (no overlay; pure point.color override) ---
     function applySelection(point, keyUpper) {
