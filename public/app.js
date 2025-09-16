@@ -40,8 +40,9 @@ function buildNameToIso2() {
   let CURRENT_DETAILS = null;          // { iso2, displayName, holidays, regionCode }
   let TODAY_PRETTY_DATE = '';
 
-  // Selection key for reapply
-  let SELECTED_KEY = null;
+  // All-Year selection via per-point color
+  let SELECTED_KEY = null;     // 'CA', 'FR', ...
+  let SELECTED_POINT = null;   // Highcharts point
 
   // Tooltip sources for non-All-Year views
   let TODAY_ITEMS_MAP = new Map(); // ISO2 -> [holiday names today]
@@ -278,6 +279,7 @@ function buildNameToIso2() {
           isToday ? 'today' : ''
         ].filter(Boolean).join(' ');
 
+        // Use aria-current for accessibility when it's today
         const ariaCurrent = isToday ? ' aria-current="date"' : '';
 
         return `<div class="${classes}"${ariaCurrent} data-tip="${esc(tip)}" aria-label="${esc(tip)}" tabindex="0">${day}</div>`;
@@ -296,6 +298,7 @@ function buildNameToIso2() {
 
     return `<div class="year-cal">${months}</div>`;
   }
+
 
   // ---- Lightweight calendar tooltip ----
   let calTipEl = null;
@@ -361,7 +364,7 @@ function buildNameToIso2() {
       return;
     }
 
-    // --- Calendar view ---
+    // --- Calendar view (unchanged) ---
     if (mode === 'cal') {
       detailsBody.innerHTML = renderCalendarHTML(YEAR, natList, lwDates);
       hideCalTip();
@@ -369,10 +372,14 @@ function buildNameToIso2() {
     }
 
     // --- LIST view: grouped by month + grey out past dates ---
+    // local "today" at midnight
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
+    // Sort all national holidays by date asc
     const sorted = natList.slice().sort((a, b) => parseLocalISODate(a.date) - parseLocalISODate(b.date));
+
+    // Group by month number (0..11)
     const byMonth = new Map();
     for (const h of sorted) {
       const d = parseLocalISODate(h.date);
@@ -381,6 +388,7 @@ function buildNameToIso2() {
       byMonth.get(m).push(h);
     }
 
+    // Build HTML
     const sections = [];
     for (const [m, items] of byMonth) {
       const monthName = new Date(YEAR, m, 1).toLocaleString(undefined, { month: 'long' });
@@ -389,18 +397,22 @@ function buildNameToIso2() {
         const d = parseLocalISODate(h.date);
         const isPast = d < today;
 
+        // Example: "Fri 11/28/2025"
         const pretty = d.toLocaleDateString(undefined, {
           weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit'
         });
 
+        // Primary name + optional local name note
         const primary = esc(h.name || 'Holiday');
         const local   = (h.localName && h.localName !== h.name) ? esc(h.localName) : null;
 
+        // Long weekend tag
         const inLW = lwDates.has(h.date);
         const lwTag = inLW
           ? ` <span class="pill lw" title="This holiday falls within a long weekend">Long Week-End Alert</span>`
           : '';
 
+        // Dim past rows. We add class "past" and also a light inline opacity to guarantee effect.
         const pastCls = isPast ? ' past' : '';
         const pastStyle = isPast ? ' style="opacity:.55"' : '';
 
@@ -427,62 +439,60 @@ function buildNameToIso2() {
     hideCalTip();
   }
 
-  // Helper used by All-Year tooltip to keep hover count consistent
-  function getNatCountForTooltip(iso2, fallbackVal, year) {
-    if (NAT_COUNTS.has(iso2)) return NAT_COUNTS.get(iso2);
-
-    if (!COUNTS_READY) {
-      if (Number.isFinite(fallbackVal)) return fallbackVal;
-      if (Number.isFinite(TOTALS?.[iso2]?.national)) return TOTALS[iso2].national;
+    // Helper used by All-Year tooltip to keep hover count consistent
+    function getNatCountForTooltip(iso2, fallbackVal, year) {
+      if (NAT_COUNTS.has(iso2)) return NAT_COUNTS.get(iso2);
+      if (!COUNTS_READY) {
+        // while computing, show something benign (used by tooltip branch)
+        if (Number.isFinite(fallbackVal)) return fallbackVal;
+        if (Number.isFinite(TOTALS?.[iso2]?.national)) return TOTALS[iso2].national;
+        return null;
+      }
       return null;
     }
 
-    const totalsVal = Number.isFinite(TOTALS?.[iso2]?.national) ? TOTALS[iso2].national : null;
-    return totalsVal;
-  }
+    // ---- Region list card & click wiring ----
+    function renderRegionList(iso2) {
+      const anchor = document.getElementById('region-list-anchor');
+      if (!anchor) return;
 
-  // ---- Region list card & click wiring ----
-  function renderRegionList(iso2) {
-    const anchor = document.getElementById('region-list-anchor');
-    if (!anchor) return;
+      let card = document.getElementById('region-list');
+      if (!card) {
+        card = document.createElement('article');
+        card.id = 'region-list';
+        card.className = 'card';
+        card.innerHTML = `<div><strong>States / Provinces</strong></div><div class="rows" id="region-rows"></div>`;
+        anchor.parentNode.insertBefore(card, anchor.nextSibling);
+      }
 
-    let card = document.getElementById('region-list');
-    if (!card) {
-      card = document.createElement('article');
-      card.id = 'region-list';
-      card.className = 'card';
-      card.innerHTML = `<div><strong>States / Provinces</strong></div><div class="rows" id="region-rows"></div>`;
-      anchor.parentNode.insertBefore(card, anchor.nextSibling);
-    }
+      const rows = document.getElementById('region-rows');
+      const m = REGIONS[iso2] || {};
+      const entries = Object.entries(m).sort((a,b) => b[1] - a[1]);
 
-    const rows = document.getElementById('region-rows');
-    const m = REGIONS[iso2] || {};
-    const entries = Object.entries(m).sort((a,b) => b[1] - a[1]);
+      if (!entries.length) {
+        rows.innerHTML = `<div class="note">No regional breakdown available.</div>`;
+        return;
+      }
 
-    if (!entries.length) {
-      rows.innerHTML = `<div class="note">No regional breakdown available.</div>`;
-      return;
-    }
+      rows.innerHTML = entries.map(([code, count]) => `
+        <div class="row region-row" data-code="${esc(code)}" style="cursor:pointer">
+          <div class="cell">${esc(code)}</div>
+          <div class="cell"><span class="pill">${count} regional</span></div>
+        </div>
+      `).join('');
 
-    rows.innerHTML = entries.map(([code, count]) => `
-      <div class="row region-row" data-code="${esc(code)}" style="cursor:pointer">
-        <div class="cell">${esc(code)}</div>
-        <div class="cell"><span class="pill">${count} regional</span></div>
-      </div>
-    `).join('');
-
-    rows.querySelectorAll('.region-row').forEach(el => {
-      const code = el.getAttribute('data-code');
-      el.title = `${code}: ${m[code]} regional holidays`;
-      el.addEventListener('click', async (evt) => {
-        evt.preventDefault();
-        const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
-        const countryName = (TOTALS[iso2]?.name) || iso2;
-        await renderDetails(iso2, countryName, holidays, code, CURRENT_MODE); // still national-only in panel
-        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      rows.querySelectorAll('.region-row').forEach(el => {
+        const code = el.getAttribute('data-code');
+        el.title = `${code}: ${m[code]} regional holidays`;
+        el.addEventListener('click', async (evt) => {
+          evt.preventDefault();
+          const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
+          const countryName = (TOTALS[iso2]?.name) || iso2;
+          await renderDetails(iso2, countryName, holidays, code, CURRENT_MODE); // still national-only in panel
+          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        });
       });
-    });
-  }
+    }
 
   // ---- Main init ----
   try {
@@ -511,18 +521,7 @@ function buildNameToIso2() {
         map: topology,
         spacing: [0, 0, 0, 0],
         backgroundColor: 'transparent',
-        animation: false,
-        events: {
-          load() {
-            // Hard-stop: when the mouse leaves the chart, clear any residual hover and hide tooltip
-            const c = this;
-            c.container.addEventListener('mouseleave', () => {
-              const s = c.series && c.series[0];
-              if (s && s.points) s.points.forEach(p => p.setState(''));
-              c.tooltip?.hide(0);
-            });
-          }
-        }
+        animation: false
       },
       title: { text: null },
       credits: { enabled: true },
@@ -648,7 +647,6 @@ function buildNameToIso2() {
             hover:  { animation: { duration: 0 }, halo: false },
             inactive: { opacity: 1 }
           },
-          // NOTE: stickyTracking intentionally NOT set; we want hover to swap cleanly.
           animation: false,
           nullInteraction: true,
           enableMouseTracking: true,
@@ -663,17 +661,15 @@ function buildNameToIso2() {
         keys: ['hc-key','value','label'],
         joinBy: ['hc-key','hc-key'],
         allAreas: true,
-        trackByArea: true,                           // critical: hover by polygon area (no border gaps)
 
-        // Adaptive polygon borders (we’ll update width after init)
-        borderWidth: 1,
-        borderColor: '#2b2b2b',
+        // Thin borders always (even when "selected")
+        borderColor: '#000',
+        borderWidth: 0.15,
+        allowPointSelect: false, // we control highlight via point.color
 
-        // === HOVER/COLOR RULES ===
-        allowPointSelect: true,                      // click selects (persists)
         states: {
-          hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false },  // yellow hover (temporary)
-          select: { enabled: true, color: '#ffc54d' }                              // yellow on click (persistent)
+          hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.15, borderColor: '#000', brightness: 0.10 },
+          select: { borderWidth: 0.15, borderColor: '#000', brightness: 0 }
         },
 
         dataLabels: { enabled: false },
@@ -681,21 +677,26 @@ function buildNameToIso2() {
 
         point: {
           events: {
-            // No manual hover handlers — let Highcharts manage hover.
+            mouseOver: function () {
+              const c = this.series.chart;
+              c.tooltip.refresh(this);
+              this.setState('hover');
+            },
+            mouseOut: function () {
+              const c = this.series.chart;
+              c.tooltip.hide(0);
+              this.setState();
+            },
             click: async function () {
+              // Only All Year opens the panel; block until counts ready (so hover and list agree)
               if (CURRENT_VIEW !== 'all' || !COUNTS_READY) return;
-
-              // Single-select behavior: deselect others, then select this one.
-              const s = this.series;
-              s.points.forEach(p => { if (p.selected) p.select(false, false); });
-              this.select(true, false);
 
               const hcKey = (this.options['hc-key'] || this['hc-key'] || '').toUpperCase();
               const iso2  = hcKey;
               const display = (TOTALS[iso2]?.name) || this.name || iso2;
 
-              // store for re-apply on view switches
-              SELECTED_KEY = hcKey;
+              // Paint this country only (yellow). Keep others as-is.
+              applySelection(this, hcKey);
 
               try {
                 const holidays = await getCountryDetails(iso2);
@@ -713,78 +714,78 @@ function buildNameToIso2() {
       }]
     });
 
-    // --- OUTLINE SERIES (crisp borders we can scale a bit) ---
-    const outline = Highcharts.geojson(topology, 'mapline');
-    const outlineSeries = chart.addSeries({
-      type: 'mapline',
-      data: outline,
-      color: '#3a3a3a',      // slightly softer than pure black
-      lineWidth: 0.6,        // will be adjusted by adaptOutline()
-      zIndex: 6,
-      enableMouseTracking: false,
-      showInLegend: false
-    }, false);
+    // === Thin, crisp global borders that stay visually consistent ===
+    // Drop-in replacement for your previous mapline + redraw block.
 
-    // Keep polygon borders ultra-thin; outline provides the visible edge
-    chart.series[0].update({
-      borderColor: '#3a3a3a',
-      borderWidth: 0.3,
-      states: {
-        hover:  { borderWidth: 0.3, borderColor: '#3a3a3a' },
-        select: { borderWidth: 0.3, borderColor: '#3a3a3a' }
-      }
-    }, false);
-    chart.redraw();
+    const BORDER_MIN = 0.35;   // never thinner than this (px)
+    const BORDER_MAX = 2.2;    // never thicker than this (px)
 
-    // Scales outline width gently with zoom + container size + DPR
-    function adaptOutline() {
-      const mv = chart.mapView;
-      const scale = mv && mv.getSVGTransform ? (mv.getSVGTransform().scaleX || 1) : 1;
-
-      // Real pixels of the container (not just plot area) help for mobile
-      const el = chart.renderTo;
-      const cw = (el && el.clientWidth)  || chart.plotWidth  || 800;
-      const ch = (el && el.clientHeight) || chart.plotHeight || 500;
-      const shorter = Math.min(cw, ch);
-
-      // Device-pixel ratio: borders feel thicker on high-DPR displays
-      const dpr = Math.max(1, window.devicePixelRatio || 1);
-
-      // Base from container size (smaller than before)
-      let base = shorter * 0.0008;               // ~0.4–0.8px typical
-      if (cw <= 420) base *= 0.70;
-      if (cw <= 360) base *= 0.60;
-
-      // Gentle zoom response
-      let lw = base * Math.pow(scale, 0.08);
-
-      // Compensate for high-DPR
-      lw = lw / (dpr * 0.9);
-
-      // Clamp
-      lw = Math.max(0.28, Math.min(1.20, lw));
-
-      outlineSeries.update({ lineWidth: lw }, false);
-
-      const poly = Math.max(0.16, Math.min(0.50, lw * 0.40));
-      chart.series[0].update({
-        borderWidth: poly,
-        states: {
-          hover:  { borderWidth: poly, borderColor: '#3a3a3a' },
-          select: { borderWidth: poly, borderColor: '#3a3a3a' }
-        }
-      }, false);
+    // Compute a base width that adapts to chart size (thinner on small/mobile)
+    function computeBaseBorderWidth(c) {
+      const pw = c?.plotWidth || c?.chartWidth || 800;
+      // ~0.14% of plot width, clamped to [0.8px, 1.8px] at default zoom
+      const adaptive = pw * 0.0014;
+      return Math.max(0.8, Math.min(1.8, adaptive));
     }
 
-    adaptOutline();
-    Highcharts.addEvent(chart, 'redraw', adaptOutline);
-    if (chart.mapView) Highcharts.addEvent(chart.mapView, 'afterSetExtremes', adaptOutline);
+    // Add the global border layer once
+    const borderLines = Highcharts.geojson(topology, 'mapline');
+    chart.addSeries({
+      id: 'borders',
+      type: 'mapline',
+      data: borderLines,
+      color: '#cfd7e6',
+      lineWidth: computeBaseBorderWidth(chart), // initial guess
+      enableMouseTracking: false,
+      showInLegend: false,
+      zIndex: 6
+    }, false);
 
-    // --- Selection helpers (native select/deselect; no manual color) ---
-    function deselectAll() {
-      const s = chart.series?.[0];
-      if (!s?.points?.length) return;
-      s.points.forEach(p => { if (p.selected) p.select(false, false); });
+    // Keep border thickness stable across zoom/pan/resize
+    function syncBorderWidth() {
+      const s = chart.get('borders');
+      if (!s) return;
+
+      const scale = (chart.mapView && chart.mapView.getScale && chart.mapView.getScale()) || 1;
+      const base  = computeBaseBorderWidth(chart);
+
+      // Scale with zoom, clamp to avoid disappearing or chunkiness
+      const lw = Math.max(BORDER_MIN, Math.min(BORDER_MAX, base / scale));
+
+      // Update without redrawing the whole world each time
+      s.update({ lineWidth: lw }, false);
+    }
+
+    // Run once now…
+    syncBorderWidth();
+
+    // …and keep in sync on any redraw (zoom/pan/reflow/resize)
+    chart.update({
+      chart: {
+        events: {
+          redraw: syncBorderWidth,
+          load:   syncBorderWidth
+        }
+      }
+    }, false);
+
+    chart.redraw();
+
+    // --- Selection helpers (no overlay; pure point.color override) ---
+    function applySelection(point, keyUpper) {
+      if (SELECTED_POINT && SELECTED_POINT.update) {
+        SELECTED_POINT.update({ color: null }, false); // back to colorAxis
+      }
+      point.update({ color: '#ffc54d' }, false);
+      chart.redraw();
+      SELECTED_POINT = point;
+      SELECTED_KEY = keyUpper;
+    }
+    function clearSelectionColor() {
+      if (SELECTED_POINT && SELECTED_POINT.update) {
+        SELECTED_POINT.update({ color: null }, false);
+        chart.redraw();
+      }
     }
     function reapplySelectionIfAllYear() {
       if (CURRENT_VIEW !== 'all' || !SELECTED_KEY) return;
@@ -794,16 +795,14 @@ function buildNameToIso2() {
         (p.options && (p.options['hc-key'] || p.options.hckey || p.options.key)) ||
         p['hc-key'] || p.key || ''
       ).toUpperCase() === SELECTED_KEY);
-      if (pt) {
-        deselectAll();
-        pt.select(true, false);
-      }
+      if (pt) applySelection(pt, SELECTED_KEY);
+      else SELECTED_POINT = null;
     }
 
     // === PRECOMPUTE: lock interactions, compute All-Year counts, then apply ===
     chart.update({ plotOptions: { series: { enableMouseTracking: false, cursor: 'default' } } }, false);
     setLoading(true, 'Computing national counts…');
-    let ALL_DATA = rows.slice();
+    let ALL_DATA = rows.slice(); // defined here so helpers can see it
 
     try {
       await precomputeAllNatCounts(YEAR);
@@ -815,9 +814,15 @@ function buildNameToIso2() {
     }
 
     // Expose a painter so Next 7/30 can color the map as a choropleth by holiday COUNT
+    // Accepts:
+    //  - iso2UpperList: string[] (countries that have >=1 holiday in the window)
+    //  - itemsFlat:     { iso2, name, date }[] for tooltips
+    //  - countsByIso2:  Map<string, number> OR plain object { CA: 5, FR: 2, ... }
     window.haColorCountries = function (iso2UpperList, itemsFlat = [], countsByIso2 = new Map()) {
-      deselectAll();
+      // Clear any All-Year highlight when painting Next-N
+      clearSelectionColor();
 
+      // Build tooltip map for the range: ISO2 -> [{date, name}, ...]
       RANGE_ITEMS_MAP = new Map();
       (itemsFlat || []).forEach(x => {
         const k = String(x.iso2 || '').toUpperCase().slice(0, 2);
@@ -825,6 +830,7 @@ function buildNameToIso2() {
         RANGE_ITEMS_MAP.get(k).push({ date: String(x.date), name: x.name });
       });
 
+      // Normalize counts map (accept Map or plain object)
       const countsMap = countsByIso2 instanceof Map
         ? countsByIso2
         : new Map(Object.entries(countsByIso2 || {}).map(([k, v]) => [String(k).toUpperCase().slice(0,2), Number(v) || 0]));
@@ -834,10 +840,12 @@ function buildNameToIso2() {
       const data = mapData.map(p => {
         const keyLc = String(p && (p['hc-key'] || p.hckey || p.key) || '').toLowerCase();
         const iso2 = keyLc.toUpperCase();
+        // prefer explicit count if present; otherwise treat as 1 for any marked country
         const count = countsMap.has(iso2) ? (countsMap.get(iso2) || 0) : (lcSet.has(keyLc) ? 1 : 0);
         return [keyLc, count > 0 ? count : null, (TOTALS[iso2]?.name) || iso2];
       });
 
+      // Choropleth classes by COUNT within the window
       chart.update({
         colorAxis: {
           dataClassColor: 'category',
@@ -855,7 +863,7 @@ function buildNameToIso2() {
 
       CURRENT_VIEW = 'range';
       showDetailsTabs(false);
-      setDetailsPanelVisible(false);
+      setDetailsPanelVisible(false); // hide everything under the map in range views
     };
 
     // ---- View tags (All Year / Today) ----
@@ -895,6 +903,7 @@ function buildNameToIso2() {
     }
 
     // ---- View switching (Map: All Year vs Today) ----
+    const ALL_DATA_BASE = rows.slice();
     const ALL_COLOR_CLASSES = [
       { to: 4,              color: '#E7F6BC', name: '≤ 4' },
       { from: 5,  to: 7,    color: '#BEE6B6', name: '5-7' },
@@ -913,6 +922,7 @@ function buildNameToIso2() {
           colorAxis: { dataClasses: ALL_COLOR_CLASSES, dataClassColor: 'category', nullColor: '#d9d9d9' }
         }, false);
 
+        // Use the precomputed NAT_COUNTS to populate ALL view data
         const mapData = chart.series[0].mapData || [];
         const data = mapData.map(p => {
           const keyLc = String(p && (p['hc-key'] || p.hckey || p.key) || '').toLowerCase();
@@ -930,7 +940,7 @@ function buildNameToIso2() {
       }
 
       // --- TODAY ---
-      deselectAll();
+      clearSelectionColor();
       setDetailsPanelVisible(false);
       showDetailsTabs(false);
 
@@ -944,7 +954,7 @@ function buildNameToIso2() {
         weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
       });
 
-      const todayList = await fetchTodaySet(YEAR);
+      const todayList = await fetchTodaySet(YEAR); // unique ISO2 upper
       const todaySet = new Set(todayList.map(c => c.toLowerCase()));
 
       const mapData = chart.series[0].mapData || [];
@@ -971,10 +981,6 @@ function buildNameToIso2() {
       setLoading(false);
     }
 
-    // Kick off All-Year data
-    await precomputeAllNatCounts(YEAR);
-    applyNatCountsToChart(chart);
-
   } catch (err) {
     console.error('Init failed:', err);
     const el = document.getElementById('wpr-map');
@@ -997,6 +1003,7 @@ function buildNameToIso2() {
     return isoUTC(new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate())));
   }
 
+  // (Kept for completeness, but we won't render the list in ranges anymore)
   function renderDetailsByDate(_byDate, _titleNote) {}
 
   async function fetchDay(dateISO) {
@@ -1018,8 +1025,11 @@ function buildNameToIso2() {
 
       const results = await Promise.all(dates.map(fetchDay));
 
+      // Flat items with date for tooltips
       const iso2Set = new Set();
       const itemsFlat = [];
+
+      // Count total holidays per country in the window
       const counts = new Map();
 
       results.forEach(r => {
@@ -1035,6 +1045,7 @@ function buildNameToIso2() {
       });
 
       if (typeof window.haColorCountries === 'function') {
+        // Paint choropleth with counts & provide items for tooltips
         window.haColorCountries(Array.from(iso2Set).sort(), itemsFlat, counts);
       }
     } catch (e) {
@@ -1042,6 +1053,7 @@ function buildNameToIso2() {
     }
   }
 
+  // Wire buttons; stop parent tab handler from hijacking the click
   function setActive(btn) {
     document.querySelectorAll('.view-tag').forEach(b => b.classList.remove('is-active'));
     btn?.classList.add('is-active');
