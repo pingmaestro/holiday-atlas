@@ -970,7 +970,7 @@ function buildNameToIso2() {
           dataClassColor: 'category',
           dataClasses: [
             { to: 0, color: '#d9d9d9', name: 'No national holiday today' },
-            { from: 1, color: '#0b3d91', name: 'National Holiday today' }
+            { from: 1, color: '#BEE6B6', name: 'National Holiday today' }
           ],
           nullColor: '#d9d9d9'
         }
