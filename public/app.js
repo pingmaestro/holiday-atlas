@@ -656,10 +656,10 @@ function buildNameToIso2() {
         // Adaptive polygon borders (we’ll update width after init)
         borderWidth: 1,
         borderColor: '#2b2b2b',
-
+        allowPointSelect: false, 
         states: {
           hover:  { color: '#ffe082', brightness: 0.10, animation: { duration: 0 }, halo: false },
-          select: { brightness: 0 }
+          select: { enabled: false }
         },
 
         dataLabels: { enabled: false },
