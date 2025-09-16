@@ -40,8 +40,8 @@ function buildNameToIso2() {
   let CURRENT_DETAILS = null;          // { iso2, displayName, holidays, regionCode }
   let TODAY_PRETTY_DATE = '';
 
-  // All-Year selection via native point.select
-  let SELECTED_KEY = null;     // 'CA', 'FR', ...
+  // Selection key for reapply
+  let SELECTED_KEY = null;
 
   // Tooltip sources for non-All-Year views
   let TODAY_ITEMS_MAP = new Map(); // ISO2 -> [holiday names today]
@@ -511,7 +511,18 @@ function buildNameToIso2() {
         map: topology,
         spacing: [0, 0, 0, 0],
         backgroundColor: 'transparent',
-        animation: false
+        animation: false,
+        events: {
+          load() {
+            // Hard-stop: when the mouse leaves the chart, clear any residual hover and hide tooltip
+            const c = this;
+            c.container.addEventListener('mouseleave', () => {
+              const s = c.series && c.series[0];
+              if (s && s.points) s.points.forEach(p => p.setState(''));
+              c.tooltip?.hide(0);
+            });
+          }
+        }
       },
       title: { text: null },
       credits: { enabled: true },
@@ -637,7 +648,7 @@ function buildNameToIso2() {
             hover:  { animation: { duration: 0 }, halo: false },
             inactive: { opacity: 1 }
           },
-          stickyTracking: true,               // keeps hover stable; no paint trails
+          // NOTE: stickyTracking intentionally NOT set; we want hover to swap cleanly.
           animation: false,
           nullInteraction: true,
           enableMouseTracking: true,
@@ -652,13 +663,14 @@ function buildNameToIso2() {
         keys: ['hc-key','value','label'],
         joinBy: ['hc-key','hc-key'],
         allAreas: true,
+        trackByArea: true,                           // critical: hover by polygon area (no border gaps)
 
         // Adaptive polygon borders (we’ll update width after init)
         borderWidth: 1,
         borderColor: '#2b2b2b',
 
         // === HOVER/COLOR RULES ===
-        allowPointSelect: true,                      // click selects
+        allowPointSelect: true,                      // click selects (persists)
         states: {
           hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false },  // yellow hover (temporary)
           select: { enabled: true, color: '#ffc54d' }                              // yellow on click (persistent)
@@ -671,7 +683,6 @@ function buildNameToIso2() {
           events: {
             // No manual hover handlers — let Highcharts manage hover.
             click: async function () {
-              // Only All Year opens the panel; wait until counts ready (so hover and list agree)
               if (CURRENT_VIEW !== 'all' || !COUNTS_READY) return;
 
               // Single-select behavior: deselect others, then select this one.
@@ -741,22 +752,20 @@ function buildNameToIso2() {
 
       // Base from container size (smaller than before)
       let base = shorter * 0.0008;               // ~0.4–0.8px typical
-      // Additional reductions on narrow screens
       if (cw <= 420) base *= 0.70;
       if (cw <= 360) base *= 0.60;
 
-      // Gentle zoom response (very small exponent keeps it subtle)
+      // Gentle zoom response
       let lw = base * Math.pow(scale, 0.08);
 
-      // Compensate for high-DPR (divide, but not too aggressively)
+      // Compensate for high-DPR
       lw = lw / (dpr * 0.9);
 
-      // Clamp to a tight range so it never becomes “marker pen”
+      // Clamp
       lw = Math.max(0.28, Math.min(1.20, lw));
 
       outlineSeries.update({ lineWidth: lw }, false);
 
-      // Polygons: keep a faint inner stroke so gaps don't show when edges meet
       const poly = Math.max(0.16, Math.min(0.50, lw * 0.40));
       chart.series[0].update({
         borderWidth: poly,
@@ -767,7 +776,6 @@ function buildNameToIso2() {
       }, false);
     }
 
-    // Run now and whenever the map size/zoom changes
     adaptOutline();
     Highcharts.addEvent(chart, 'redraw', adaptOutline);
     if (chart.mapView) Highcharts.addEvent(chart.mapView, 'afterSetExtremes', adaptOutline);
@@ -887,7 +895,6 @@ function buildNameToIso2() {
     }
 
     // ---- View switching (Map: All Year vs Today) ----
-    const ALL_DATA_BASE = rows.slice();
     const ALL_COLOR_CLASSES = [
       { to: 4,              color: '#E7F6BC', name: '≤ 4' },
       { from: 5,  to: 7,    color: '#BEE6B6', name: '5-7' },
@@ -918,7 +925,7 @@ function buildNameToIso2() {
         chart.redraw();
         setDetailsPanelVisible(true);
         showDetailsTabs(true);
-        reapplySelectionIfAllYear(); // reselect previously clicked country
+        reapplySelectionIfAllYear();
         return;
       }
 
@@ -963,6 +970,10 @@ function buildNameToIso2() {
       chart.redraw();
       setLoading(false);
     }
+
+    // Kick off All-Year data
+    await precomputeAllNatCounts(YEAR);
+    applyNatCountsToChart(chart);
 
   } catch (err) {
     console.error('Init failed:', err);
