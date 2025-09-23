@@ -261,7 +261,7 @@ function buildNameToIso2() {
   }
 
   // ---- Calendar renderer (12-month year grid) ----
-  function renderCalendarHTML(year, holidays, longWeekendDates) {
+  function renderCalendarHTML(year, holidays, longWeekendDates /* Set<string> yyyy-mm-dd */) {
     // Map yyyy-mm-dd -> [holiday names]
     const holidayMap = new Map();
     holidays.forEach(h => {
@@ -302,7 +302,9 @@ function buildNameToIso2() {
         const inLW     = longWeekendDates && longWeekendDates.has(key);
 
         const names = isHoliday ? holidayMap.get(key) : [];
-        const longDate = dLocal.toLocaleDateString(undefined, { weekday:'short', year:'numeric', month:'long', day:'numeric' });
+        const longDate = dLocal.toLocaleDateString(undefined, {
+          weekday:'short', year:'numeric', month:'long', day:'numeric'
+        });
 
         // Tooltip text
         let tip = longDate;
@@ -318,7 +320,6 @@ function buildNameToIso2() {
           isToday ? 'today' : ''
         ].filter(Boolean).join(' ');
 
-        // Use aria-current for accessibility when it's today
         const ariaCurrent = isToday ? ' aria-current="date"' : '';
 
         return `<div class="${classes}"${ariaCurrent} data-tip="${esc(tip)}" aria-label="${esc(tip)}" tabindex="0">${day}</div>`;
@@ -326,7 +327,7 @@ function buildNameToIso2() {
 
       return `
         <section class="cal-month">
-          <h4>${esc(mn)} ${year}${flagEmoji ? ` <span class="cal-flag">${flagEmoji}</span>` : ''}</h4>
+          <h4>${esc(mn)} ${year}</h4>
           <div class="cal-grid">
             ${dow.map(d => `<div class="cal-dow">${d}</div>`).join('')}
             ${blanks.join('')}${days.join('')}
@@ -337,6 +338,7 @@ function buildNameToIso2() {
 
     return `<div class="year-cal">${months}</div>`;
   }
+
 
 
   // ---- Lightweight calendar tooltip ----
@@ -377,7 +379,7 @@ function buildNameToIso2() {
 
   // ---- Details renderer (List/Calendar) ----
   async function renderDetails(iso2, displayName, holidays, regionCode = null, mode = CURRENT_MODE) {
-    setDetailsPanelVisible(true); // Only called in All Year
+    setDetailsPanelVisible(true);
     CURRENT_DETAILS = { iso2, displayName, holidays, regionCode };
 
     const all = Array.isArray(holidays) ? holidays : [];
@@ -386,9 +388,8 @@ function buildNameToIso2() {
     const { dateSet: lwDates } = await getLongWeekends(iso2, YEAR);
 
     const suffix = regionCode ? ` — ${regionCode}` : '';
-    const flag = flagFromISO2(iso2);
+    const flag = flagFromISO2(iso2); // ✅ header only
     detailsTitle.innerHTML = `<span class="details-flag">${flag}</span>${esc(displayName)}${suffix} — Holidays (${YEAR})`;
-
 
     const btnList = document.getElementById('details-view-list');
     const btnCal  = document.getElementById('details-view-cal');
@@ -405,19 +406,18 @@ function buildNameToIso2() {
       return;
     }
 
-    // --- Calendar view (unchanged) ---
     if (mode === 'cal') {
+      // ✅ unchanged signature & call
       detailsBody.innerHTML = renderCalendarHTML(YEAR, natList, lwDates);
       hideCalTip();
       return;
     }
 
-    // --- LIST view: grouped by month + grey out past dates ---
+    // LIST view (no flags in rows)
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     const sorted = natList.slice().sort((a, b) => parseLocalISODate(a.date) - parseLocalISODate(b.date));
-
     const byMonth = new Map();
     for (const h of sorted) {
       const d = parseLocalISODate(h.date);
@@ -448,8 +448,6 @@ function buildNameToIso2() {
 
         const pastCls = isPast ? ' past' : '';
         const pastStyle = isPast ? ' style="opacity:.55"' : '';
-
-        const nameBlock = local ? `<span class="note">${local}</span> — ${primary}` : primary;
 
         return `
           <div class="row two-cols${pastCls}"${pastStyle}>
