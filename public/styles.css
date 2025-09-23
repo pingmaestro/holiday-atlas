@@ -272,6 +272,9 @@ header {
 .country-flag { flex:0 0 auto; }
 .country-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
+.details-flag { font-size: 1.25rem; margin-right: .4rem; }
+
+.cal-flag { margin-left: .4rem; font-size: 1.1rem; vertical-align: middle; }
 
 /* Mobile tweak */
 @media (max-width: 720px) {

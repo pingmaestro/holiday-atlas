@@ -261,7 +261,7 @@ function buildNameToIso2() {
   }
 
   // ---- Calendar renderer (12-month year grid) ----
-  function renderCalendarHTML(year, holidays, longWeekendDates /* Set<string> yyyy-mm-dd */) {
+  function renderCalendarHTML(year, holidays, longWeekendDates /* Set<string> yyyy-mm-dd */, flagEmoji = '') {
     // Map yyyy-mm-dd -> [holiday names]
     const holidayMap = new Map();
     holidays.forEach(h => {
@@ -326,7 +326,7 @@ function buildNameToIso2() {
 
       return `
         <section class="cal-month">
-          <h4>${esc(mn)} ${year}</h4>
+          <h4>${esc(mn)} ${year}${flagEmoji ? ` <span class="cal-flag">${flagEmoji}</span>` : ''}</h4>
           <div class="cal-grid">
             ${dow.map(d => `<div class="cal-dow">${d}</div>`).join('')}
             ${blanks.join('')}${days.join('')}
@@ -386,7 +386,9 @@ function buildNameToIso2() {
     const { dateSet: lwDates } = await getLongWeekends(iso2, YEAR);
 
     const suffix = regionCode ? ` — ${regionCode}` : '';
-    detailsTitle.textContent = `${displayName}${suffix} — Holidays (${YEAR})`;
+    const flag = flagFromISO2(iso2);
+    detailsTitle.innerHTML = `<span class="details-flag">${flag}</span>${esc(displayName)}${suffix} — Holidays (${YEAR})`;
+
 
     const btnList = document.getElementById('details-view-list');
     const btnCal  = document.getElementById('details-view-cal');
@@ -405,7 +407,7 @@ function buildNameToIso2() {
 
     // --- Calendar view (unchanged) ---
     if (mode === 'cal') {
-      detailsBody.innerHTML = renderCalendarHTML(YEAR, natList, lwDates);
+      detailsBody.innerHTML = renderCalendarHTML(YEAR, natList, lwDates, flag);
       hideCalTip();
       return;
     }
@@ -447,11 +449,13 @@ function buildNameToIso2() {
         const pastCls = isPast ? ' past' : '';
         const pastStyle = isPast ? ' style="opacity:.55"' : '';
 
+        const nameBlock = local ? `<span class="note">${local}</span> — ${primary}` : primary;
+
         return `
           <div class="row two-cols${pastCls}"${pastStyle}>
             <div class="cell">${esc(pretty)}</div>
             <div class="cell">
-              ${local ? `<span class="note">${local}</span> — ${primary}` : primary}
+              <span class="details-flag" aria-hidden="true">${flag}</span>${nameBlock}
               ${lwTag}
             </div>
           </div>
