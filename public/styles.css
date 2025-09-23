@@ -264,6 +264,15 @@ header {
   vector-effect: non-scaling-stroke;
 }
 
+.country-panel { margin-top: 1rem; }
+.country-panel.hidden { display: none; }
+.country-panel h2 { font-size: 1.1rem; font-weight: 600; margin: 0 0 .5rem 0; }
+.country-chip-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap: .5rem; }
+.country-chip { display:flex; align-items:center; gap:.5rem; padding:.5rem .6rem; border:1px solid #e5e7eb; border-radius:.6rem; background:#fff; box-shadow:0 1px 0 rgba(0,0,0,.03); font-size:.9rem; line-height:1.2; }
+.country-flag { flex:0 0 auto; }
+.country-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+
 /* Mobile tweak */
 @media (max-width: 720px) {
   .year-cal { grid-template-columns: repeat(2, 1fr); }

@@ -988,6 +988,44 @@ function buildNameToIso2() {
   }
 })();
 
+  function countryNameFromISO2(iso2) {
+    const rec = (TOTALS && TOTALS[iso2]) || null;
+    return rec?.name || iso2;
+  }
+
+  function flagFromISO2(iso2) {
+    if (!iso2 || iso2.length !== 2) return "🌐";
+    const A = 0x1F1E6, a = "A".charCodeAt(0), u = iso2.toUpperCase();
+    return String.fromCodePoint(A + (u.charCodeAt(0) - a), A + (u.charCodeAt(1) - a));
+  }
+
+  function renderCountryPanel(viewLabel, iso2List) {
+    const mount = document.getElementById("holiday-country-list");
+    if (!mount) return;
+
+    const list = Array.from(new Set(iso2List || [])).filter(Boolean)
+      .sort((a,b)=>countryNameFromISO2(a).localeCompare(countryNameFromISO2(b)));
+
+    const count = list.length;
+    const noun = count === 1 ? "country is" : "countries are";
+    const chips = list.map(iso2=>{
+      const name = countryNameFromISO2(iso2);
+      const flag = flagFromISO2(iso2);
+      return `<div class="country-chip" title="${name} (${iso2})">
+        <span class="country-flag">${flag}</span><span class="country-name">${name}</span>
+      </div>`;
+    }).join("");
+
+    mount.innerHTML = `<h2>${viewLabel} (${count} ${noun} celebrating) a national holiday</h2>
+      <div class="country-chip-list">${chips}</div>`;
+    mount.classList.toggle("hidden", count === 0);
+  }
+
+  function hideCountryPanel() {
+    const mount = document.getElementById("holiday-country-list");
+    if (mount) mount.classList.add("hidden");
+  }
+
 /* ===== Next N days powered by todaySet (no hardcoded JSON) =============== */
 (() => {
   const $ = (s) => document.querySelector(s);
