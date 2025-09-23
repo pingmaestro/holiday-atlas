@@ -261,7 +261,7 @@ function buildNameToIso2() {
   }
 
   // ---- Calendar renderer (12-month year grid) ----
-  function renderCalendarHTML(year, holidays, longWeekendDates /* Set<string> yyyy-mm-dd */, flagEmoji = '') {
+  function renderCalendarHTML(year, holidays, longWeekendDates) {
     // Map yyyy-mm-dd -> [holiday names]
     const holidayMap = new Map();
     holidays.forEach(h => {
@@ -407,7 +407,7 @@ function buildNameToIso2() {
 
     // --- Calendar view (unchanged) ---
     if (mode === 'cal') {
-      detailsBody.innerHTML = renderCalendarHTML(YEAR, natList, lwDates, flag);
+      detailsBody.innerHTML = renderCalendarHTML(YEAR, natList, lwDates);
       hideCalTip();
       return;
     }
@@ -455,7 +455,7 @@ function buildNameToIso2() {
           <div class="row two-cols${pastCls}"${pastStyle}>
             <div class="cell">${esc(pretty)}</div>
             <div class="cell">
-              <span class="details-flag" aria-hidden="true">${flag}</span>${nameBlock}
+              ${local ? `<span class="note">${local}</span> — ${primary}` : primary}
               ${lwTag}
             </div>
           </div>
