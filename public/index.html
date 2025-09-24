@@ -6,13 +6,11 @@
     <title>Holiday Atlas — National Holidays Map</title>
 
     <link rel="stylesheet" href="/styles.css" />
-    <link rel="stylesheet" href="/busiest-days.css" />
 
     <script src="https://code.highcharts.com/maps/highmaps.js" defer></script>
     <script src="https://code.highcharts.com/modules/exporting.js" defer></script>
     <script src="https://code.highcharts.com/modules/accessibility.js" defer></script>
     <script type="module" src="/app.js"></script>
-    <script src="/busiest-days.js" defer></script>
   </head>
   <body>
     <header>
@@ -22,18 +20,17 @@
     <div class="view-tags" role="tablist" aria-label="Map views">
       <button class="view-tag is-active" role="tab" aria-selected="true" data-view="all">All Year</button>
       <button class="view-tag" role="tab" aria-selected="false" data-view="today">Today</button>
-      <button class="view-tag" role="tab" aria-selected="false" data-view="next7">next 7 days</button>
-      <button class="view-tag" role="tab" aria-selected="false" data-view="next30">next 30 days</button>
-      <button id="btn-busiest-days" class="view-tag" type="button">Busiest days</button>
+      <button class="view-tag" role="tab" aria-selected="false" data-view="next7">Next 7 days</button>
+      <button class="view-tag" role="tab" aria-selected="false" data-view="next30">Next 30 days</button>
     </div>
 
-    <div id="view-loading" class="loading-chip" hidden>Loading Today…</div>
+    <div id="view-loading" class="loading-chip" hidden>Loading</div>
 
     <div class="map-wrap">
       <div id="wpr-map" role="img" aria-label="Choropleth map of national holidays"></div>
       <article id="details" class="card">
         <div class="details-header">
-          <strong id="details-title">Holidays (2025)</strong>
+          <strong id="details-title">National Holidays</strong>
           <div class="details-views" role="tablist" aria-label="Detail views">
             <button id="details-view-list"  class="details-view is-active" role="tab" aria-selected="true">List</button>
             <button id="details-view-cal"   class="details-view" role="tab" aria-selected="false">Calendar</button>
@@ -47,6 +44,5 @@
 
   <section id="holiday-country-list" class="country-panel hidden" aria-live="polite"></section>
 
-    <div id="busiest-days-root" hidden aria-hidden="true"></div>
   </body>
 </html>
