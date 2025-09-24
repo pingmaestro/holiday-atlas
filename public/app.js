@@ -691,14 +691,15 @@ function buildNameToIso2() {
         borderColor: '#000',
         borderWidth: 0.15,
         allowPointSelect: false,
-
+        inactiveOtherPoints: false,
         states: {
           hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.15, borderColor: '#000', brightness: 0.10 },
-          select: { borderWidth: 0.15, borderColor: '#000', brightness: 0 }
+          select: { borderWidth: 0.15, borderColor: '#000', brightness: 0 },
+          inactive: { opacity: 1 }
         },
 
         dataLabels: { enabled: false },
-        inactiveOtherPoints: false,
+
 
         point: {
           events: {
