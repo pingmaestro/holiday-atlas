@@ -658,6 +658,7 @@ function buildNameToIso2() {
             if (!COUNTS_READY && count == null) {
               return `<strong>${esc(name)}</strong><br/><span class="pill">Computing…</span>`;
             }
+            const flag = flagFromISO2(iso2);
             return count == null
               ? `<strong>${esc(name)}</strong><br/><span class="pill">No data</span>`
               : `<strong>${esc(name)}</strong><br/><span class="pill">${count} national holidays</span>`;
