@@ -738,21 +738,22 @@ function buildNameToIso2() {
     });
 
     // === Map hover API: highlight countries from external UI (chips) ===
-    const isoToPoint = new Map();
-    const mapSeries = chart.series[0];
-    mapSeries.points.forEach(p => {
-      const key = (p.options && (p.options['hc-key'] || p.options.hckey || p.options.key)) || p['hc-key'] || p.key || '';
-      const iso = String(key).toUpperCase();
-      if (iso) isoToPoint.set(iso, p);
-    });
+    function getPointByIso2(iso2) {
+      const keyLc = String(iso2).toLowerCase();
+      const s = chart.series[0];
+      if (!s?.points?.length) return null;
+      return s.points.find(p => {
+        const hcKey = (p.options && (p.options['hc-key'] || p.options.key)) || p['hc-key'] || p.key;
+        return String(hcKey).toLowerCase() === keyLc;
+      });
+    }
 
     let currentHoverPoint = null;
     function highlightCountryOnMap(iso2) {
-      const p = isoToPoint.get(String(iso2).toUpperCase());
+      const p = getPointByIso2(iso2);
       if (!p) return;
       if (currentHoverPoint && currentHoverPoint !== p) currentHoverPoint.setState('');
       p.setState('hover');
-      p.graphic && p.graphic.toFront();
       chart.tooltip && chart.tooltip.refresh(p);
       currentHoverPoint = p;
     }
@@ -764,6 +765,22 @@ function buildNameToIso2() {
       }
     }
     window.haMapHover = { highlightCountryOnMap, clearHighlight };
+
+    // Delegate chip events (works for dynamically rendered lists)
+    document.addEventListener('mouseover', ev => {
+      const chip = ev.target.closest('.country-chip');
+      if (chip?.dataset.iso2) highlightCountryOnMap(chip.dataset.iso2);
+    });
+    document.addEventListener('mouseout', ev => {
+      if (ev.target.closest('.country-chip')) clearHighlight();
+    });
+    document.addEventListener('focusin', ev => {
+      const chip = ev.target.closest('.country-chip');
+      if (chip?.dataset.iso2) highlightCountryOnMap(chip.dataset.iso2);
+    });
+    document.addEventListener('focusout', ev => {
+      if (ev.target.closest('.country-chip')) clearHighlight();
+    });
 
     // Wire delegation once for dynamically created chips
     document.addEventListener('mouseover', ev => {
