@@ -83,6 +83,26 @@ header {
 /* Square Highcharts buttons (no radius) */
 .highcharts-button-box { rx: 0 !important; ry: 0 !important; }
 
+.tt-country {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.tt-badge {
+  display: inline-block;
+  background: #288DBB;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 12px;
+}
+
+.tt-badge.no-data {
+  background: #aaa;
+}
+
 /* ---- Cards / Details ---- */
 .card {
   max-width: 960px;     /* align card width with map container */

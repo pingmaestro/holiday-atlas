@@ -660,8 +660,8 @@ function buildNameToIso2() {
             }
             const flag = flagFromISO2(iso2);
             return count == null
-              ? `<strong>${esc(name)}</strong><br/><span class="pill">No data</span>`
-              : `<strong>${esc(name)}</strong><br/><span class="pill">${count} national holidays</span>`;
+              ? `<div class="tt-country">${esc(name)}</div><div class="tt-badge no-data">No data</div>`
+              : `<div class="tt-country">${esc(name)}</div><div class="tt-badge">${count} national holidays</div>`;
           }
 
           return `<strong>${esc(name)}</strong>`;
