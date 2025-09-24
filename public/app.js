@@ -1,4 +1,4 @@
-// Holiday Atlas app.js — YEAR views + List/Calendar (national-only) + Long Weekend tags/overlay
+// Holiday Atlas app.js — YEAR views + List/Calendar (national-only) + Long Weekend tags/overlay + chip→map hover
 
 import { normalizeCodeList } from '/utils/country-codes.js';
 
@@ -26,8 +26,8 @@ function buildNameToIso2() {
   function parseLocalISODate(iso) {
     const [y, m, d] = String(iso).split('-').map(Number);
     return Number.isInteger(y) && Number.isInteger(m) && Number.isInteger(d)
-      ? new Date(y, m - 1, d) // local midnight
-      : new Date(iso);        // fallback
+      ? new Date(y, m - 1, d)
+      : new Date(iso);
   }
 
   // ---- State ----
@@ -90,7 +90,7 @@ function buildNameToIso2() {
     const chips = list.map(iso2=>{
       const name = countryNameFromISO2(iso2);
       const flag = flagFromISO2(iso2);
-      return `<div class="country-chip" title="${esc(name)} (${iso2})">
+      return `<div class="country-chip" data-iso2="${esc(String(iso2).toUpperCase())}" title="${esc(name)} (${iso2})">
         <span class="country-flag">${flag}</span><span class="country-name">${esc(name)}</span>
       </div>`;
     }).join("");
@@ -98,10 +98,14 @@ function buildNameToIso2() {
     mount.innerHTML = `<h2>${esc(viewLabel)} (${count} ${noun} celebrating) a national holiday</h2>
       <div class="country-chip-list">${chips}</div>`;
     mount.classList.toggle("hidden", count === 0);
+
+    // If panel appears (Today/Next-N), clear any lingering map highlight first
+    if (window.haMapHover?.clearHighlight) window.haMapHover.clearHighlight();
   }
   function hideCountryPanel() {
     const mount = document.getElementById("holiday-country-list");
     if (mount) mount.classList.add("hidden");
+    if (window.haMapHover?.clearHighlight) window.haMapHover.clearHighlight();
   }
   // Expose tiny hooks so the Next-N block can call them
   window.haRenderCountryPanel = renderCountryPanel;
@@ -262,7 +266,6 @@ function buildNameToIso2() {
 
   // ---- Calendar renderer (12-month year grid) ----
   function renderCalendarHTML(year, holidays, longWeekendDates /* Set<string> yyyy-mm-dd */) {
-    // Map yyyy-mm-dd -> [holiday names]
     const holidayMap = new Map();
     holidays.forEach(h => {
       const d = h.date;
@@ -270,10 +273,9 @@ function buildNameToIso2() {
       holidayMap.get(d).push(h.name || h.localName || 'Holiday');
     });
 
-    // Local "today" parts
     const now = new Date();
     const todayY = now.getFullYear();
-    const todayM = now.getMonth(); // 0..11
+    const todayM = now.getMonth();
     const todayD = now.getDate();
 
     const monthNames = Array.from({ length: 12 }, (_, i) =>
@@ -298,7 +300,7 @@ function buildNameToIso2() {
 
         const isHoliday = holidayMap.has(key);
         const isToday  = (yyyy === todayY && mIdx === todayM && day === todayD);
-        const isPast   = dLocal < new Date(todayY, todayM, todayD); // local midnight compare
+        const isPast   = dLocal < new Date(todayY, todayM, todayD);
         const inLW     = longWeekendDates && longWeekendDates.has(key);
 
         const names = isHoliday ? holidayMap.get(key) : [];
@@ -306,7 +308,6 @@ function buildNameToIso2() {
           weekday:'short', year:'numeric', month:'long', day:'numeric'
         });
 
-        // Tooltip text
         let tip = longDate;
         if (isToday) tip += ' • Today';
         if (names.length) tip += ` — ${names.join(', ')}`;
@@ -338,8 +339,6 @@ function buildNameToIso2() {
 
     return `<div class="year-cal">${months}</div>`;
   }
-
-
 
   // ---- Lightweight calendar tooltip ----
   let calTipEl = null;
@@ -407,13 +406,12 @@ function buildNameToIso2() {
     }
 
     if (mode === 'cal') {
-      // ✅ unchanged signature & call
       detailsBody.innerHTML = renderCalendarHTML(YEAR, natList, lwDates);
       hideCalTip();
       return;
     }
 
-    // LIST view (no flags in rows)
+    // LIST view
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -472,59 +470,59 @@ function buildNameToIso2() {
     hideCalTip();
   }
 
-    // Helper used by All-Year tooltip to keep hover count consistent
-    function getNatCountForTooltip(iso2, fallbackVal, year) {
-      if (NAT_COUNTS.has(iso2)) return NAT_COUNTS.get(iso2);
-      if (!COUNTS_READY) {
-        if (Number.isFinite(fallbackVal)) return fallbackVal;
-        if (Number.isFinite(TOTALS?.[iso2]?.national)) return TOTALS[iso2].national;
-        return null;
-      }
+  // Helper used by All-Year tooltip to keep hover count consistent
+  function getNatCountForTooltip(iso2, fallbackVal, year) {
+    if (NAT_COUNTS.has(iso2)) return NAT_COUNTS.get(iso2);
+    if (!COUNTS_READY) {
+      if (Number.isFinite(fallbackVal)) return fallbackVal;
+      if (Number.isFinite(TOTALS?.[iso2]?.national)) return TOTALS[iso2].national;
       return null;
     }
+    return null;
+  }
 
-    // ---- Region list card & click wiring ----
-    function renderRegionList(iso2) {
-      const anchor = document.getElementById('region-list-anchor');
-      if (!anchor) return;
+  // ---- Region list card & click wiring ----
+  function renderRegionList(iso2) {
+    const anchor = document.getElementById('region-list-anchor');
+    if (!anchor) return;
 
-      let card = document.getElementById('region-list');
-      if (!card) {
-        card = document.createElement('article');
-        card.id = 'region-list';
-        card.className = 'card';
-        card.innerHTML = `<div><strong>States / Provinces</strong></div><div class="rows" id="region-rows"></div>`;
-        anchor.parentNode.insertBefore(card, anchor.nextSibling);
-      }
-
-      const rows = document.getElementById('region-rows');
-      const m = REGIONS[iso2] || {};
-      const entries = Object.entries(m).sort((a,b) => b[1] - a[1]);
-
-      if (!entries.length) {
-        rows.innerHTML = `<div class="note">No regional breakdown available.</div>`;
-        return;
-      }
-
-      rows.innerHTML = entries.map(([code, count]) => `
-        <div class="row region-row" data-code="${esc(code)}" style="cursor:pointer">
-          <div class="cell">${esc(code)}</div>
-          <div class="cell"><span class="pill">${count} regional</span></div>
-        </div>
-      `).join('');
-
-      rows.querySelectorAll('.region-row').forEach(el => {
-        const code = el.getAttribute('data-code');
-        el.title = `${code}: ${m[code]} regional holidays`;
-        el.addEventListener('click', async (evt) => {
-          evt.preventDefault();
-          const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
-          const countryName = (TOTALS[iso2]?.name) || iso2;
-          await renderDetails(iso2, countryName, holidays, code, CURRENT_MODE); // still national-only in panel
-          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-        });
-      });
+    let card = document.getElementById('region-list');
+    if (!card) {
+      card = document.createElement('article');
+      card.id = 'region-list';
+      card.className = 'card';
+      card.innerHTML = `<div><strong>States / Provinces</strong></div><div class="rows" id="region-rows"></div>`;
+      anchor.parentNode.insertBefore(card, anchor.nextSibling);
     }
+
+    const rows = document.getElementById('region-rows');
+    const m = REGIONS[iso2] || {};
+    const entries = Object.entries(m).sort((a,b) => b[1] - a[1]);
+
+    if (!entries.length) {
+      rows.innerHTML = `<div class="note">No regional breakdown available.</div>`;
+      return;
+    }
+
+    rows.innerHTML = entries.map(([code, count]) => `
+      <div class="row region-row" data-code="${esc(code)}" style="cursor:pointer">
+        <div class="cell">${esc(code)}</div>
+        <div class="cell"><span class="pill">${count} regional</span></div>
+      </div>
+    `).join('');
+
+    rows.querySelectorAll('.region-row').forEach(el => {
+      const code = el.getAttribute('data-code');
+      el.title = `${code}: ${m[code]} regional holidays`;
+      el.addEventListener('click', async (evt) => {
+        evt.preventDefault();
+        const holidays = detailsCache.get(`${iso2}-${YEAR}`) || [];
+        const countryName = (TOTALS[iso2]?.name) || iso2;
+        await renderDetails(iso2, countryName, holidays, code, CURRENT_MODE);
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      });
+    });
+  }
 
   // ---- Main init ----
   try {
@@ -538,7 +536,7 @@ function buildNameToIso2() {
 
     // 2) Build series data using hc-key (lowercased ISO2)
     const rows = Object.entries(TOTALS).map(([code, rec]) => [
-      code.toLowerCase(),                              // hc-key
+      code.toLowerCase(),
       Number.isFinite(rec?.national) ? rec.national : null,
       rec?.name || code
     ]);
@@ -566,7 +564,6 @@ function buildNameToIso2() {
         }
       },
 
-      // Zoom buttons stacked under the burger
       mapNavigation: {
         enabled: true,
         enableButtons: true,
@@ -628,9 +625,8 @@ function buildNameToIso2() {
           const name = this.point.name || this.point.options?.label || iso2;
           const val = (typeof this.point.value === 'number') ? this.point.value : null;
 
-          // TODAY
           if (CURRENT_VIEW === 'today') {
-            const list = TODAY_ITEMS_MAP.get(iso2) || []; // array of holiday names today
+            const list = TODAY_ITEMS_MAP.get(iso2) || [];
             if (!list.length) {
               return `<strong>${esc(name)}</strong><br/><span class="pill">No national holiday today</span>`;
             }
@@ -641,7 +637,6 @@ function buildNameToIso2() {
             return `<strong>${esc(name)}</strong><br/>${lines}`;
           }
 
-          // RANGE (Next 7 / 30)
           if (CURRENT_VIEW === 'range') {
             const items = RANGE_ITEMS_MAP.get(iso2) || [];
             if (!items.length) {
@@ -658,7 +653,6 @@ function buildNameToIso2() {
             return `<strong>${esc(name)}</strong><br/>${lines}`;
           }
 
-          // ALL YEAR — use precomputed NAT_COUNTS so hover never changes on click
           if (CURRENT_VIEW === 'all') {
             const count = getNatCountForTooltip(iso2, val, YEAR);
             if (!COUNTS_READY && count == null) {
@@ -689,15 +683,14 @@ function buildNameToIso2() {
       series: [{
         type: 'map',
         mapData: topology,
-        data: rows,                                  // [hc-key, value, label]
+        data: rows,
         keys: ['hc-key','value','label'],
         joinBy: ['hc-key','hc-key'],
         allAreas: true,
 
-        // Thin borders always (even when "selected")
         borderColor: '#000',
         borderWidth: 0.15,
-        allowPointSelect: false, // we control highlight via point.color
+        allowPointSelect: false,
 
         states: {
           hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.15, borderColor: '#000', brightness: 0.10 },
@@ -720,14 +713,12 @@ function buildNameToIso2() {
               this.setState();
             },
             click: async function () {
-              // Only All Year opens the panel; block until counts ready (so hover and list agree)
               if (CURRENT_VIEW !== 'all' || !COUNTS_READY) return;
 
               const hcKey = (this.options['hc-key'] || this['hc-key'] || '').toUpperCase();
               const iso2  = hcKey;
               const display = (TOTALS[iso2]?.name) || this.name || iso2;
 
-              // Paint this country only (yellow). Keep others as-is.
               applySelection(this, hcKey);
 
               try {
@@ -744,6 +735,55 @@ function buildNameToIso2() {
           }
         }
       }]
+    });
+
+    // === Map hover API: highlight countries from external UI (chips) ===
+    const isoToPoint = new Map();
+    const mapSeries = chart.series[0];
+    mapSeries.points.forEach(p => {
+      const key = (p.options && (p.options['hc-key'] || p.options.hckey || p.options.key)) || p['hc-key'] || p.key || '';
+      const iso = String(key).toUpperCase();
+      if (iso) isoToPoint.set(iso, p);
+    });
+
+    let currentHoverPoint = null;
+    function highlightCountryOnMap(iso2) {
+      const p = isoToPoint.get(String(iso2).toUpperCase());
+      if (!p) return;
+      if (currentHoverPoint && currentHoverPoint !== p) currentHoverPoint.setState('');
+      p.setState('hover');
+      p.graphic && p.graphic.toFront();
+      chart.tooltip && chart.tooltip.refresh(p);
+      currentHoverPoint = p;
+    }
+    function clearHighlight() {
+      if (currentHoverPoint) {
+        currentHoverPoint.setState('');
+        chart.tooltip && chart.tooltip.hide(0);
+        currentHoverPoint = null;
+      }
+    }
+    window.haMapHover = { highlightCountryOnMap, clearHighlight };
+
+    // Wire delegation once for dynamically created chips
+    document.addEventListener('mouseover', ev => {
+      const chip = ev.target.closest('.country-chip');
+      if (!chip || !chip.dataset.iso2) return;
+      highlightCountryOnMap(chip.dataset.iso2);
+    });
+    document.addEventListener('mouseout', ev => {
+      const chip = ev.target.closest('.country-chip');
+      if (!chip) return;
+      clearHighlight();
+    });
+    document.addEventListener('focusin', ev => {
+      const chip = ev.target.closest('.country-chip');
+      if (chip?.dataset.iso2) highlightCountryOnMap(chip.dataset.iso2);
+    });
+    document.addEventListener('focusout', ev => {
+      const chip = ev.target.closest('.country-chip');
+      if (!chip) return;
+      clearHighlight();
     });
 
     // === Thin, crisp global borders that stay visually consistent ===
@@ -828,6 +868,7 @@ function buildNameToIso2() {
     // Painter for Next N
     window.haColorCountries = function (iso2UpperList, itemsFlat = [], countsByIso2 = new Map()) {
       clearSelectionColor();
+      clearHighlight(); // also clear chip-induced hover
 
       RANGE_ITEMS_MAP = new Map();
       (itemsFlat || []).forEach(x => {
@@ -866,7 +907,7 @@ function buildNameToIso2() {
 
       CURRENT_VIEW = 'range';
       showDetailsTabs(false);
-      setDetailsPanelVisible(false); // hide the country details card; list panel stays handled separately
+      setDetailsPanelVisible(false);
     };
 
     // ---- View tags (All Year / Today) ----
@@ -920,7 +961,6 @@ function buildNameToIso2() {
       CURRENT_VIEW = view;
 
       if (view === 'all') {
-        // Restore ALL YEAR choropleth
         const mapData = chart.series[0].mapData || [];
         const data = mapData.map(p => {
           const keyLc = String(p && (p['hc-key'] || p.hckey || p.key) || '').toLowerCase();
@@ -938,8 +978,8 @@ function buildNameToIso2() {
         setDetailsPanelVisible(true);
         showDetailsTabs(true);
 
-        // Hide the country list under the map in ALL view
         hideCountryPanel();
+        clearHighlight();
 
         reapplySelectionIfAllYear();
         return;
@@ -959,7 +999,7 @@ function buildNameToIso2() {
         weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
       });
 
-      const todayList = await fetchTodaySet(YEAR); // unique ISO2 upper
+      const todayList = await fetchTodaySet(YEAR);
       const todaySet = new Set(todayList.map(c => c.toLowerCase()));
 
       const mapData = chart.series[0].mapData || [];
@@ -985,7 +1025,6 @@ function buildNameToIso2() {
       chart.redraw();
       setLoading(false);
 
-      // >>> NEW: render the country list for TODAY
       renderCountryPanel("Today", todayList);
     }
 
@@ -1007,7 +1046,6 @@ function buildNameToIso2() {
     return isoUTC(new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate())));
   }
 
-  // (Kept for completeness, but we won't render the details card in ranges)
   function renderDetailsByDate(_byDate, _titleNote) {}
 
   async function fetchDay(dateISO) {
@@ -1052,7 +1090,6 @@ function buildNameToIso2() {
         window.haColorCountries(Array.from(iso2Set).sort(), itemsFlat, counts);
       }
 
-      // >>> NEW: render the country list for Next N
       const label = days === 7 ? "Next 7 Days" : "Next 30 Days";
       if (typeof window.haRenderCountryPanel === 'function') {
         window.haRenderCountryPanel(label, Array.from(iso2Set).sort());
@@ -1062,7 +1099,6 @@ function buildNameToIso2() {
     }
   }
 
-  // Wire buttons; stop parent tab handler from hijacking the click
   function setActive(btn) {
     document.querySelectorAll('.view-tag').forEach(b => b.classList.remove('is-active'));
     btn?.classList.add('is-active');

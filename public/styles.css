@@ -31,9 +31,11 @@ header {
 
 .view-tags {
   display: flex;
+  flex-wrap: wrap; 
   gap: 8px;
   align-items: center;
   margin: 8px 0 12px;
+  justify-content: center;
 }
 
 .view-tag {
@@ -49,7 +51,11 @@ header {
   cursor: pointer;
 }
 
-.view-tag:hover { background:  #4b72f3; }
+.view-tag:hover { 
+  background:  #4b72f3;
+  color: white;
+
+}
 .view-tag.is-active {
   background: #4b72f3;;   
   color: #fff;
