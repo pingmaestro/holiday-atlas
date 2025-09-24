@@ -83,24 +83,19 @@ header {
 /* Square Highcharts buttons (no radius) */
 .highcharts-button-box { rx: 0 !important; ry: 0 !important; }
 
-.tt-country {
+.tt-card {
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+.tt-title {
   font-weight: 600;
-  font-size: 14px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
-
-.tt-badge {
-  display: inline-block;
-  background: #288DBB;
-  color: #fff;
+.tt-count {
   font-size: 12px;
-  font-weight: 500;
-  padding: 2px 6px;
-  border-radius: 12px;
-}
-
-.tt-badge.no-data {
-  background: #aaa;
+  color: #444;
 }
 
 /* ---- Cards / Details ---- */
