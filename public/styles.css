@@ -296,17 +296,16 @@ header {
   shape-rendering: geometricPrecision;
 }
 
-/* Never dim any series group we mark as no-dim */
-.highcharts-series.no-dim.highcharts-inactive,
-.highcharts-series.no-dim .highcharts-point,
-.highcharts-series.no-dim .highcharts-graph {
+/* Legend hover: never fade map areas or the border mapline series */
+.highcharts-series.highcharts-map-series.highcharts-inactive,
+.highcharts-series.highcharts-mapline-series.highcharts-inactive {
   opacity: 1 !important;
 }
 
-/* Borders are a mapline series; make sure legend-hover can't fade them */
-.highcharts-series.highcharts-mapline-series.highcharts-inactive,
-.highcharts-mapline-series .highcharts-graph,
-.highcharts-mapline-series .highcharts-point {
+/* Keep individual polygons (including null-value countries) fully visible */
+.highcharts-point-inactive,
+.highcharts-null-point,
+.highcharts-series.highcharts-map-series .highcharts-point {
   opacity: 1 !important;
 }
 

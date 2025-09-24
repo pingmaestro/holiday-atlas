@@ -607,7 +607,7 @@ function buildNameToIso2() {
           { from: 14, to: 19,   color: '#2160A8', name: '14-19' },
           { from: 20,           color: '#081D58', name: '20+' }
         ],
-        nullColor: '#d9d9d9',
+        nullColor: '#c8ced8',
         labels: { formatter: function() { return this.value ? Math.round(this.value) : this.value; } }
       },
 
@@ -806,7 +806,7 @@ function buildNameToIso2() {
       id: 'borders',
       type: 'mapline',
       data: borderLines,
-      color: '#cfd7e6',
+      color: '#aab6c8',
       lineWidth: computeBaseBorderWidth(chart),
       enableMouseTracking: false,
       showInLegend: false,
