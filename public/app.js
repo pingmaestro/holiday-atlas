@@ -868,7 +868,7 @@ function buildNameToIso2() {
       await precomputeAllNatCounts(YEAR);
       applyNatCountsToChart(chart, ALL_DATA);
     } finally {
-      chart.update({ plotOptions: { series: { enableMouseTracking: true, cursor: 'pointer' } } }, false);
+      chart.update({ plotOptions: { series: { enableMouseTracking: true, cursor: 'pointer', states: { inactive: { opacity: 1 } } } } }, false);
       chart.redraw();
       setLoading(false);
     }
