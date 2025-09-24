@@ -695,11 +695,9 @@ function buildNameToIso2() {
         states: {
           hover:  { color: '#ffe082', animation: { duration: 0 }, halo: false, borderWidth: 0.15, borderColor: '#000', brightness: 0.10 },
           select: { borderWidth: 0.15, borderColor: '#000', brightness: 0 },
-          inactive: { opacity: 1 }
+          inactive: { enabled: false }
         },
-
         dataLabels: { enabled: false },
-
 
         point: {
           events: {
@@ -868,7 +866,7 @@ function buildNameToIso2() {
       await precomputeAllNatCounts(YEAR);
       applyNatCountsToChart(chart, ALL_DATA);
     } finally {
-      chart.update({ plotOptions: { series: { enableMouseTracking: true, cursor: 'pointer', states: { inactive: { opacity: 1 } } } } }, false);
+      chart.update({ plotOptions: { series: { enableMouseTracking: true, cursor: 'pointer', states: { inactive: { enabled: false } } } } }, false);
       chart.redraw();
       setLoading(false);
     }

@@ -296,11 +296,17 @@ header {
   shape-rendering: geometricPrecision;
 }
 
-/* Keep other countries from fading on hover/legend interactions */
-.highcharts-point-inactive,
-.highcharts-inactive,
-.highcharts-null-point,
-.highcharts-series.highcharts-map-series .highcharts-point {
+/* Never dim any series group we mark as no-dim */
+.highcharts-series.no-dim.highcharts-inactive,
+.highcharts-series.no-dim .highcharts-point,
+.highcharts-series.no-dim .highcharts-graph {
+  opacity: 1 !important;
+}
+
+/* Borders are a mapline series; make sure legend-hover can't fade them */
+.highcharts-series.highcharts-mapline-series.highcharts-inactive,
+.highcharts-mapline-series .highcharts-graph,
+.highcharts-mapline-series .highcharts-point {
   opacity: 1 !important;
 }
 
