@@ -811,7 +811,8 @@ function buildNameToIso2() {
       lineWidth: computeBaseBorderWidth(chart),
       enableMouseTracking: false,
       showInLegend: false,
-      zIndex: 6
+      zIndex: 9,
+      states: { inactive: { enabled: false } }
     }, false);
 
     function syncBorderWidth() {
