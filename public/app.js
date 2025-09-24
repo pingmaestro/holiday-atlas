@@ -766,41 +766,30 @@ function buildNameToIso2() {
     }
     window.haMapHover = { highlightCountryOnMap, clearHighlight };
 
-    // Delegate chip events (works for dynamically rendered lists)
-    document.addEventListener('mouseover', ev => {
-      const chip = ev.target.closest('.country-chip');
-      if (chip?.dataset.iso2) highlightCountryOnMap(chip.dataset.iso2);
-    });
-    document.addEventListener('mouseout', ev => {
-      if (ev.target.closest('.country-chip')) clearHighlight();
-    });
-    document.addEventListener('focusin', ev => {
-      const chip = ev.target.closest('.country-chip');
-      if (chip?.dataset.iso2) highlightCountryOnMap(chip.dataset.iso2);
-    });
-    document.addEventListener('focusout', ev => {
-      if (ev.target.closest('.country-chip')) clearHighlight();
-    });
-
-    // Wire delegation once for dynamically created chips
-    document.addEventListener('mouseover', ev => {
-      const chip = ev.target.closest('.country-chip');
+    // Chip → map hover/focus (single delegation block)
+    document.addEventListener('mouseover', (e) => {
+      const chip = e.target.closest('.country-chip');
       if (!chip || !chip.dataset.iso2) return;
       highlightCountryOnMap(chip.dataset.iso2);
     });
-    document.addEventListener('mouseout', ev => {
-      const chip = ev.target.closest('.country-chip');
-      if (!chip) return;
-      clearHighlight();
+
+    // Avoid clearing when moving between children of the same chip
+    document.addEventListener('mouseout', (e) => {
+      const fromChip = e.target.closest('.country-chip');
+      const toChip   = e.relatedTarget && e.relatedTarget.closest?.('.country-chip');
+      if (fromChip && fromChip !== toChip) clearHighlight();
     });
-    document.addEventListener('focusin', ev => {
-      const chip = ev.target.closest('.country-chip');
-      if (chip?.dataset.iso2) highlightCountryOnMap(chip.dataset.iso2);
+
+    document.addEventListener('focusin', (e) => {
+      const chip = e.target.closest('.country-chip');
+      if (!chip || !chip.dataset.iso2) return;
+      highlightCountryOnMap(chip.dataset.iso2);
     });
-    document.addEventListener('focusout', ev => {
-      const chip = ev.target.closest('.country-chip');
-      if (!chip) return;
-      clearHighlight();
+
+    document.addEventListener('focusout', (e) => {
+      const fromChip = e.target.closest('.country-chip');
+      const toChip   = e.relatedTarget && e.relatedTarget.closest?.('.country-chip');
+      if (fromChip && fromChip !== toChip) clearHighlight();
     });
 
     // === Thin, crisp global borders that stay visually consistent ===
@@ -1062,8 +1051,6 @@ function buildNameToIso2() {
     const n = new Date();
     return isoUTC(new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate())));
   }
-
-  function renderDetailsByDate(_byDate, _titleNote) {}
 
   async function fetchDay(dateISO) {
     const r = await fetch(`/api/todaySet?date=${dateISO}`, { cache: 'no-store' });
