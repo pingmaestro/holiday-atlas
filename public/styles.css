@@ -398,3 +398,30 @@ header {
   .rows .row .cell:last-child { grid-column: 1 / -1; }
   .year-cal { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ===== Wide-screen layout: push sidebar left, let content breathe ===== */
+@media (min-width: 1280px) {
+  .layout {
+    /* Stop centering the whole layout; bias it to the left */
+    max-width: none;
+    margin-left: clamp(12px, 4vw, 64px);
+    margin-right: auto;
+
+    /* Wider gap and a capped main column for readability */
+    grid-template-columns: 260px minmax(0, 1100px);
+    gap: 24px;
+
+    /* More room on the right side */
+    padding-left: 0;
+    padding-right: clamp(24px, 8vw, 128px);
+  }
+}
+
+@media (min-width: 1600px) {
+  .layout {
+    grid-template-columns: 280px minmax(0, 1200px);
+    margin-left: clamp(12px, 6vw, 120px); /* nudge even closer to the edge */
+    gap: 28px;
+    padding-right: clamp(32px, 10vw, 160px);
+  }
+}
