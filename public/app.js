@@ -719,6 +719,13 @@ function buildNameToIso2() {
               const iso2  = hcKey;
               const display = (TOTALS[iso2]?.name) || this.name || iso2;
 
+              // --- TOGGLE-OFF logic: click the same yellow country to reset ---
+              if (SELECTED_KEY === iso2) {
+                resetAllYearSelection();           // hide list/cal + clear header & selection
+                if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+                return;
+              }
+
               applySelection(this, hcKey);
 
               try {
@@ -858,6 +865,22 @@ function buildNameToIso2() {
       else SELECTED_POINT = null;
     }
 
+    // --- NEW: full reset for All Year (no country, no list/calendar) ---
+    function resetAllYearSelection() {
+      // Clear highlight color on the map
+      clearSelectionColor();
+      SELECTED_POINT = null;
+      SELECTED_KEY = null;
+
+      // Clear details content + hide the panel/tabs
+      if (detailsTitle) detailsTitle.textContent = '';
+      if (detailsBody)  detailsBody.innerHTML = '';
+      CURRENT_DETAILS = null;
+
+      setDetailsPanelVisible(false);
+      showDetailsTabs(false);
+    }
+
     // === PRECOMPUTE: lock interactions, compute All-Year counts, then apply ===
     chart.update({ plotOptions: { series: { enableMouseTracking: false, cursor: 'default' } } }, false);
     setLoading(true, 'Computing national counts…');
@@ -982,13 +1005,16 @@ function buildNameToIso2() {
         chart.series[0].setData(data, false);
         chart.redraw();
 
-        setDetailsPanelVisible(true);
-        showDetailsTabs(true);
-
+        // When returning to All Year, keep UI minimal until a country is selected again
         hideCountryPanel();
         clearHighlight();
 
-        reapplySelectionIfAllYear();
+        // If you want the panel hidden by default upon switching back:
+        setDetailsPanelVisible(false);
+        showDetailsTabs(false);
+
+        // If a country was still selected, rehighlight it (optional):
+        // reapplySelectionIfAllYear();
         return;
       }
 
