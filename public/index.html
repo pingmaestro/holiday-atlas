@@ -17,27 +17,55 @@
       <div class="brand">Holiday Atlas — Interactive Map of National Holidays</div>
     </header>
 
-    <div class="view-tags" role="tablist" aria-label="Map views">
-      <button class="view-tag is-active" role="tab" aria-selected="true" data-view="all">All Year</button>
-      <button class="view-tag" role="tab" aria-selected="false" data-view="today">Today</button>
-      <button class="view-tag" role="tab" aria-selected="false" data-view="next7">Next 7 days</button>
-      <button class="view-tag" role="tab" aria-selected="false" data-view="next30">Next 30 days</button>
-    </div>
-    <div class="map-wrap">
-      <div id="wpr-map" role="img" aria-label="Choropleth map of national holidays"></div>
-      <article id="details" class="card">
-        <div class="details-header">
-          <strong id="details-title">National Holidays</strong>
-          <div class="details-views" role="tablist" aria-label="Detail views">
-            <button id="details-view-list"  class="details-view is-active" role="tab" aria-selected="true">List</button>
-            <button id="details-view-cal"   class="details-view" role="tab" aria-selected="false">Calendar</button>
-          </div>
+    <div class="layout">
+      <aside class="menu">
+        <div class="box">
+          <h2>Content</h2>
+          <ol>
+            <li><a href="#interactive-map">Interactive Map</a></li>
+          </ol>
         </div>
-        <div id="details-body"></div>
-      </article>
+      </aside>
+
+      <main class="main">
+        <section id="interactive-map" class="section">
+          <div class="view-tags" role="tablist" aria-label="Map views">
+            <button class="view-tag is-active" role="tab" aria-selected="true" data-view="all">All Year</button>
+            <button class="view-tag" role="tab" aria-selected="false" data-view="today">Today</button>
+            <button class="view-tag" role="tab" aria-selected="false" data-view="next7">Next 7 days</button>
+            <button class="view-tag" role="tab" aria-selected="false" data-view="next30">Next 30 days</button>
+          </div>
+
+          <div class="map-wrap">
+            <div id="wpr-map" role="img" aria-label="Choropleth map of national holidays"></div>
+            <article id="details" class="card">
+              <div class="details-header">
+                <strong id="details-title">National Holidays</strong>
+                <div class="details-views" role="tablist" aria-label="Detail views">
+                  <button id="details-view-list" class="details-view is-active" role="tab" aria-selected="true">List</button>
+                  <button id="details-view-cal" class="details-view" role="tab" aria-selected="false">Calendar</button>
+                </div>
+              </div>
+              <div id="details-body"></div>
+            </article>
+          </div>
+
+          <div id="region-list-anchor"></div>
+          <div id="view-loading" class="loading-chip" hidden>Loading</div>
+          <section id="holiday-country-list" class="country-panel hidden" aria-live="polite"></section>
+        </section>
+      </main>
     </div>
-    <div id="region-list-anchor"></div>
-    <div id="view-loading" class="loading-chip" hidden>Loading</div>
-  <section id="holiday-country-list" class="country-panel hidden" aria-live="polite"></section>
+
+    <script>
+      document.addEventListener('click', (e) => {
+        const a = e.target.closest('a[href^="#"]');
+        if (!a) return;
+        const el = document.querySelector(a.getAttribute('href'));
+        if (!el) return;
+        e.preventDefault(); el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        history.replaceState(null, '', a.getAttribute('href'));
+      });
+    </script>
   </body>
 </html>
