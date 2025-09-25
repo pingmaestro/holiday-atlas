@@ -18,13 +18,18 @@
     </header>
 
     <div class="layout">
+      <!-- LEFT: minimalist sidebar menu -->
       <aside class="menu">
-        <div class="box">
-          <h2>Content</h2>
-          <ol>
-            <li><a href="#interactive-map">Interactive Map</a></li>
-          </ol>
-        </div>
+        <h2 class="menu-title">
+          Countries with the Most Holidays <span id="menu-year"></span>
+        </h2>
+        <nav class="menu-nav" aria-label="Page sections">
+          <a class="menu-link" href="#interactive-map">Top 10 Countries with the Most Holidays</a>
+          <a class="menu-link" href="#fewest">Which Countries Have the Fewest Number of Public Holidays?</a>
+          <a class="menu-link" href="#religious">Are Public Holidays and Religious Holidays the Same?</a>
+          <a class="menu-link" href="#us-holidays">How Many Public Holidays Does the United States Have?</a>
+          <a class="menu-link" href="#sources">Sources</a>
+        </nav>
       </aside>
 
       <main class="main">
@@ -58,6 +63,7 @@
     </div>
 
     <script>
+      // Smooth in-page scroll (safe even if target section doesn't exist)
       document.addEventListener('click', (e) => {
         const a = e.target.closest('a[href^="#"]');
         if (!a) return;
@@ -66,6 +72,14 @@
         e.preventDefault(); el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         history.replaceState(null, '', a.getAttribute('href'));
       });
+
+      // Year badge inside the left menu title
+      (function () {
+        const y = new URLSearchParams(location.search).get('year');
+        const YEAR = Number.isInteger(+y) && +y >= 1900 && +y <= 2100 ? +y : (new Date()).getFullYear();
+        const badge = document.getElementById('menu-year');
+        if (badge) badge.textContent = ` ${YEAR}`;
+      })();
     </script>
   </body>
 </html>
