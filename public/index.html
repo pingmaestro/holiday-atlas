@@ -63,15 +63,28 @@
           <div id="view-loading" class="loading-chip" hidden>Loading</div>
           <section id="holiday-country-list" class="country-panel hidden" aria-live="polite"></section>
         </section>
-        <section id="most">
+        
+        <section id="most" class="card">
           <h2>Countries with the Most Holidays</h2>
-          <p>…content…</p>
+          <div class="table-wrap">
+            <table id="holiday-table">
+              <thead>
+                <tr>
+                  <th scope="col" class="sortable" data-key="country" data-type="string" aria-sort="none">
+                    COUNTRY
+                    <span class="sort-indicator" aria-hidden="true"></span>
+                  </th>
+                  <th scope="col" class="num sortable" data-key="holidays" data-type="number" aria-sort="descending">
+                    # OF PUBLIC HOLIDAYS
+                    <span class="sort-indicator" aria-hidden="true"></span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </section>
 
-        <section id="most">
-          <h2>Countries with the Most Holidays</h2>
-          <p>…content…</p>
-        </section>
 
         <section id="fewest">
           <h2>Countries with the Fewest Holidays</h2>

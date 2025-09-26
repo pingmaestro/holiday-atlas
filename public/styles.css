@@ -356,6 +356,23 @@ header {
 .highcharts-series.highcharts-map-series .highcharts-point { opacity: 1 !important; }
 
 /* ============================================================================
+   Countries SUM Table
+   ========================================================================== */
+
+.table-wrap { overflow: auto; border: 1px solid #e5e7eb; border-radius: 10px; }
+table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
+thead th { position: sticky; top: 0; background: #f8fafc; text-align: left; padding: 10px 12px; font-weight: 700; letter-spacing: .02em; border-bottom: 1px solid #e5e7eb; }
+tbody td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; }
+tbody tr:hover { background: #f9fbff; }
+.num { text-align: right; }
+.country-cell { display: flex; align-items: center; gap: 8px; }
+.country-flag { font-size: 18px; line-height: 1; }
+.sortable { cursor: pointer; user-select: none; }
+.sortable[aria-sort="ascending"]  .sort-indicator::after { content: " ▲"; }
+.sortable[aria-sort="descending"] .sort-indicator::after { content: " ▼"; }
+.sortable[aria-sort="none"]       .sort-indicator::after { content: ""; }
+
+/* ============================================================================
    Loading chip
    ========================================================================== */
 .loading-chip {
