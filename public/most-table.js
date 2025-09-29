@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, m =>
 const flagFromISO2 = iso2 =>
   iso2?.toUpperCase().replace(/./g, c => String.fromCodePoint(127397 + c.charCodeAt())) || '🏳️';
 
-// --- 1) Robust continent normalizer (handles fuzzy labels) ---
+// --- Robust continent normalizer (handles fuzzy labels) ---
 function normCont(raw) {
   const v = String(raw || '').trim().toUpperCase();
   if (!v) return 'Other';
@@ -90,15 +90,17 @@ function setupSorting(table, data) {
   return { applySortOn: rows => apply(rows) };
 }
 
-// --- 2) Dynamic filter bar (chips to the right of H2; only for continents present) ---
+// --- Dynamic filter bar (chips to the right of H2; only for continents present; always shows All) ---
 function makeFilterBar(section, data, sorter) {
-  // Which continents are actually present?
-  const present = Array.from(new Set(data.original.map(r => r.continent)));
-
-  // Preferred order; only keep what exists (exclude 'Other' from chips)
+  // Which continents are actually present after normalization?
+  const presentSet = new Set(data.original.map(r => r.continent));
+  // Preferred order (exclude Other from chips; we’ll add it only if it's the only thing present)
   const order = ['Africa','Asia','Europe','North America','South America','Oceania'];
-  const chips = order.filter(c => present.includes(c));
-  if (!chips.length) return; // nothing to filter
+  let chips = order.filter(c => presentSet.has(c));
+
+  // If nothing matched (everything is "Other"), still show an "Other" chip too
+  const onlyOther = chips.length === 0 && presentSet.has('Other');
+  if (onlyOther) chips = ['Other'];
 
   // Wrap h2 + filters in a flex header row
   let head = section.querySelector('.table-head');
@@ -117,17 +119,20 @@ function makeFilterBar(section, data, sorter) {
     });
   }
 
+  // Build bar: always include "All" at the end
   const bar = document.createElement('div');
   bar.className = 'table-filters';
-  // Default active = All
-  bar.innerHTML = [...chips, 'All'].map(name =>
-    `<button class="pill ${name==='All'?'is-active':''}" data-cont="${name}" aria-pressed="${name==='All'?'true':'false'}">${name}</button>`
-  ).join(' ');
+  const buttons = [...chips, 'All']
+    .map(name => `<button class="pill ${name==='All'?'is-active':''}" data-cont="${name}" aria-pressed="${name==='All'?'true':'false'}">${name}</button>`)
+    .join(' ');
+  bar.innerHTML = buttons;
   head.appendChild(bar);
 
+  // Click handling
   bar.addEventListener('click', e => {
     const btn = e.target.closest('button[data-cont]');
     if (!btn) return;
+
     bar.querySelectorAll('button').forEach(b => {
       const active = b === btn;
       b.classList.toggle('is-active', active);
@@ -150,7 +155,7 @@ export function mountMostTable(rows) {
   const tbody   = table?.querySelector('tbody');
   if (!tbody) return;
 
-  // Normalize continent and keep both original & current views
+  // Normalize continent and keep both original & current sets
   const normalized = rows.map(r => ({ ...r, continent: normCont(r.continent) }));
   const data = { original: normalized, current: [...normalized] };
 
