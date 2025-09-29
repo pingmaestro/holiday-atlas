@@ -185,7 +185,7 @@ header {
   gap: 12px;
   margin-bottom: 8px;
 }
-
+.pill,
 .details-views { display: inline-flex; gap: 8px; }
 
 .pill,
