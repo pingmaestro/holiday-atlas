@@ -3,14 +3,6 @@
 import { normalizeCodeList } from '/utils/country-codes.js';
 import { mountMostTable } from './most-table.js';
 
-function buildNameToIso2() {
-  const map = new Map();
-  for (const [iso2, rec] of Object.entries(TOTALS || {})) {
-    if (rec?.name) map.set(String(rec.name).toLowerCase(), iso2);
-  }
-  return map;
-}
-
 (async function () {
   // ---- Dynamic YEAR with optional ?year= override ----
   const yParam = Number(new URLSearchParams(location.search).get('year'));
@@ -69,7 +61,7 @@ function buildNameToIso2() {
   }
   const showDetailsTabs = (show) => { if (detailsTabsEl) detailsTabsEl.hidden = !show; };
 
-  // ---- Country list helpers (moved INSIDE IIFE so they see TOTALS) ----
+  // ---- Country list helpers (can see TOTALS after load) ----
   function countryNameFromISO2(iso2) {
     const rec = (TOTALS && TOTALS[iso2]) || null;
     return rec?.name || iso2;
@@ -100,7 +92,6 @@ function buildNameToIso2() {
       <div class="country-chip-list">${chips}</div>`;
     mount.classList.toggle("hidden", count === 0);
 
-    // If panel appears (Today/Next-N), clear any lingering map highlight first
     if (window.haMapHover?.clearHighlight) window.haMapHover.clearHighlight();
   }
   function hideCountryPanel() {
@@ -341,7 +332,7 @@ function buildNameToIso2() {
     return `<div class="year-cal">${months}</div>`;
   }
 
-  // ---- Lightweight calendar tooltip ----
+  // ---- Lightweight calendar tooltip (guarded if detailsBody exists) ----
   let calTipEl = null;
   function ensureCalTip() {
     if (calTipEl) return calTipEl;
@@ -364,18 +355,20 @@ function buildNameToIso2() {
   }
   function hideCalTip() { if (calTipEl) calTipEl.hidden = true; }
 
-  detailsBody.addEventListener('mouseover', (e) => {
-    const day = e.target.closest('.cal-day');
-    if (!day || !detailsBody.contains(day)) return;
-    showCalTipFor(day);
-  });
-  detailsBody.addEventListener('mouseout', hideCalTip);
-  detailsBody.addEventListener('focusin', (e) => {
-    const day = e.target.closest('.cal-day');
-    if (day) showCalTipFor(day);
-  });
-  detailsBody.addEventListener('focusout', hideCalTip);
-  window.addEventListener('scroll', hideCalTip, { passive: true });
+  if (detailsBody) {
+    detailsBody.addEventListener('mouseover', (e) => {
+      const day = e.target.closest('.cal-day');
+      if (!day || !detailsBody.contains(day)) return;
+      showCalTipFor(day);
+    });
+    detailsBody.addEventListener('mouseout', hideCalTip);
+    detailsBody.addEventListener('focusin', (e) => {
+      const day = e.target.closest('.cal-day');
+      if (day) showCalTipFor(day);
+    });
+    detailsBody.addEventListener('focusout', hideCalTip);
+    window.addEventListener('scroll', hideCalTip, { passive: true });
+  }
 
   // ---- Details renderer (List/Calendar) ----
   async function renderDetails(iso2, displayName, holidays, regionCode = null, mode = CURRENT_MODE) {
@@ -388,17 +381,21 @@ function buildNameToIso2() {
     const { dateSet: lwDates } = await getLongWeekends(iso2, YEAR);
 
     const suffix = regionCode ? ` — ${regionCode}` : '';
-    const flag = flagFromISO2(iso2); // ✅ header only
-    detailsTitle.innerHTML = `<span class="details-flag">${flag}</span>${esc(displayName)}${suffix} — Holidays (${YEAR})`;
+    const flag = flagFromISO2(iso2); // header only
+    if (detailsTitle) {
+      detailsTitle.innerHTML = `<span class="details-flag">${flag}</span>${esc(displayName)}${suffix} — Holidays (${YEAR})`;
+    }
 
     const btnList = document.getElementById('details-view-list');
     const btnCal  = document.getElementById('details-view-cal');
-    if (btnList && btnCal && !detailsTabsEl.hidden) {
+    if (btnList && btnCal && !detailsTabsEl?.hidden) {
       btnList.classList.toggle('is-active', mode === 'list');
       btnList.setAttribute('aria-selected', mode === 'list' ? 'true' : 'false');
       btnCal.classList.toggle('is-active', mode === 'cal');
       btnCal.setAttribute('aria-selected', mode === 'cal' ? 'true' : 'false');
     }
+
+    if (!detailsBody) return;
 
     if (!natList.length) {
       detailsBody.innerHTML = `<div class="note">No national holidays available.</div>`;
@@ -550,12 +547,12 @@ function buildNameToIso2() {
     function normCont(raw) {
       const v = String(raw || '').trim().toUpperCase();
       if (!v) return 'Other';
-      if (v === 'AFRICA' || v.includes('AFRICA')) return 'Africa';
-      if (v === 'ASIA' || v.includes('ASIA') || v.includes('MIDDLE EAST')) return 'Asia';
-      if (v === 'EUROPE' || v.includes('EUROPE')) return 'Europe';
-      if (v === 'NORTH AMERICA' || v.includes('NORTH AMERICA') || v.includes('CARIBBEAN') || v.includes('CENTRAL AMERICA')) return 'North America';
-      if (v === 'SOUTH AMERICA' || v.includes('SOUTH AMERICA')) return 'South America';
-      if (v === 'OCEANIA' || v.includes('OCEANIA') || v.includes('AUSTRALIA') || v.includes('PACIFIC')) return 'Oceania';
+      if (v.includes('AFRICA')) return 'Africa';
+      if (v.includes('ASIA') || v.includes('MIDDLE EAST')) return 'Asia';
+      if (v.includes('EUROPE')) return 'Europe';
+      if (v.includes('NORTH AMERICA') || v.includes('CARIBBEAN') || v.includes('CENTRAL AMERICA')) return 'North America';
+      if (v.includes('SOUTH AMERICA')) return 'South America';
+      if (v.includes('OCEANIA') || v.includes('AUSTRALIA') || v.includes('PACIFIC')) return 'Oceania';
       return 'Other';
     }
 
@@ -579,6 +576,11 @@ function buildNameToIso2() {
 
     // Unified getter
     const getContinent = (iso2) => contFromTopo.get(iso2) || contFromCodes.get(iso2) || 'Other';
+
+    // ✅ Build the missing map used by most-table
+    const continentByIso2 = Object.fromEntries(
+      Object.keys(TOTALS).map(iso2 => [iso2, getContinent(iso2)])
+    );
     // ========================================================================
 
     // 4) Render map
@@ -757,7 +759,7 @@ function buildNameToIso2() {
 
               // --- TOGGLE-OFF logic: click the same yellow country to reset ---
               if (SELECTED_KEY === iso2) {
-                resetAllYearSelection();           // hide list/cal + clear header & selection
+                resetAllYearSelection();
                 if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
                 return;
               }
@@ -903,16 +905,12 @@ function buildNameToIso2() {
 
     // --- NEW: full reset for All Year (no country, no list/calendar) ---
     function resetAllYearSelection() {
-      // Clear highlight color on the map
       clearSelectionColor();
       SELECTED_POINT = null;
       SELECTED_KEY = null;
-
-      // Clear details content + hide the panel/tabs
       if (detailsTitle) detailsTitle.textContent = '';
       if (detailsBody)  detailsBody.innerHTML = '';
       CURRENT_DETAILS = null;
-
       setDetailsPanelVisible(false);
       showDetailsTabs(false);
     }
@@ -931,6 +929,7 @@ function buildNameToIso2() {
       setLoading(false);
     }
 
+    // ✅ Most-table feed (now with a defined continentByIso2)
     const tableRows = Object.keys(TOTALS).map(iso2 => ({
       country: TOTALS[iso2]?.name || iso2,
       iso2,
@@ -940,12 +939,12 @@ function buildNameToIso2() {
       continent: continentByIso2[iso2] || 'Other'
     }));
     mountMostTable(tableRows);
-    reapplySelectionIfAllYear(); 
+    reapplySelectionIfAllYear();
 
     // Painter for Next N
     window.haColorCountries = function (iso2UpperList, itemsFlat = [], countsByIso2 = new Map()) {
       clearSelectionColor();
-      clearHighlight(); // also clear chip-induced hover
+      clearHighlight();
 
       RANGE_ITEMS_MAP = new Map();
       (itemsFlat || []).forEach(x => {
@@ -1052,16 +1051,10 @@ function buildNameToIso2() {
         chart.series[0].setData(data, false);
         chart.redraw();
 
-        // When returning to All Year, keep UI minimal until a country is selected again
         hideCountryPanel();
         clearHighlight();
-
-        // If you want the panel hidden by default upon switching back:
         setDetailsPanelVisible(false);
         showDetailsTabs(false);
-
-        // If a country was still selected, rehighlight it (optional):
-        // reapplySelectionIfAllYear();
         return;
       }
 
