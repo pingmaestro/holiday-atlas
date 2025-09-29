@@ -1,24 +1,41 @@
 // public/most-table.js
 
+// --- utils ---
 const esc = s => String(s ?? '').replace(/[&<>"']/g, m =>
   ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])
 );
 const flagFromISO2 = iso2 =>
   iso2?.toUpperCase().replace(/./g, c => String.fromCodePoint(127397 + c.charCodeAt())) || '🏳️';
 
-// --- Normalize continent labels ---
-const CANON = new Map([
-  ['AFRICA','Africa'],
-  ['ASIA','Asia'],
-  ['EUROPE','Europe'],
-  ['NORTH AMERICA','North America'],
-  ['SOUTH AMERICA','South America'],
-  ['OCEANIA','Oceania'],
-  ['AMERICAS','North America'],
-  ['OTHER','Other']
-]);
-const normCont = v => CANON.get(String(v || 'Other').toUpperCase()) || 'Other';
+// --- 1) Robust continent normalizer (handles fuzzy labels) ---
+function normCont(raw) {
+  const v = String(raw || '').trim().toUpperCase();
+  if (!v) return 'Other';
 
+  // Exact matches
+  if (v === 'AFRICA') return 'Africa';
+  if (v === 'ASIA') return 'Asia';
+  if (v === 'EUROPE') return 'Europe';
+  if (v === 'NORTH AMERICA') return 'North America';
+  if (v === 'SOUTH AMERICA') return 'South America';
+  if (v === 'OCEANIA' || v === 'AUSTRALIA/OCEANIA') return 'Oceania';
+  if (v === 'AMERICAS') return 'North America'; // treat generic "Americas" as NA
+
+  // Fuzzy buckets
+  if (v.includes('AFRICA')) return 'Africa'; // "Sub-Saharan Africa", "Northern Africa"
+  if (v.includes('MIDDLE EAST') || v.includes('WESTERN ASIA') || v.includes('ASIA')) return 'Asia';
+  if (v.includes('EUROPE')) return 'Europe';
+  if (v.includes('SOUTH AMERICA')) return 'South America';
+  if (v.includes('CENTRAL AMERICA') || v.includes('CARIBBEAN') || v.includes('NORTH AMERICA')) return 'North America';
+  if (v.includes('OCEANIA') || v.includes('AUSTRALIA') || v.includes('PACIFIC')) return 'Oceania';
+
+  // Rare/unknown
+  if (v.includes('ANTARCTICA')) return 'Other';
+
+  return 'Other';
+}
+
+// --- render rows ---
 function renderRows(tbody, rows) {
   tbody.innerHTML = rows.map(r => `
     <tr>
@@ -33,6 +50,7 @@ function renderRows(tbody, rows) {
   `).join('');
 }
 
+// --- sorting setup ---
 function setupSorting(table, data) {
   const headers = table.querySelectorAll('th.sortable');
   const tbody   = table.querySelector('tbody');
@@ -72,8 +90,15 @@ function setupSorting(table, data) {
   return { applySortOn: rows => apply(rows) };
 }
 
+// --- 2) Dynamic filter bar (chips to the right of H2; only for continents present) ---
 function makeFilterBar(section, data, sorter) {
-  const wanted = ['Oceania','South America','North America','Europe','Asia','Africa','All'];
+  // Which continents are actually present?
+  const present = Array.from(new Set(data.original.map(r => r.continent)));
+
+  // Preferred order; only keep what exists (exclude 'Other' from chips)
+  const order = ['Africa','Asia','Europe','North America','South America','Oceania'];
+  const chips = order.filter(c => present.includes(c));
+  if (!chips.length) return; // nothing to filter
 
   // Wrap h2 + filters in a flex header row
   let head = section.querySelector('.table-head');
@@ -83,53 +108,58 @@ function makeFilterBar(section, data, sorter) {
     const h2 = section.querySelector('h2');
     if (h2) head.appendChild(h2);
     section.insertBefore(head, section.firstChild);
-    head.style.display = 'flex';
-    head.style.alignItems = 'center';
-    head.style.justifyContent = 'space-between';
-    head.style.flexWrap = 'wrap';
-    head.style.gap = '8px';
+    Object.assign(head.style, {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      flexWrap: 'wrap',
+      gap: '8px'
+    });
   }
 
   const bar = document.createElement('div');
   bar.className = 'table-filters';
-  bar.innerHTML = wanted.map((name,i)=>
-    `<button class="pill ${i===wanted.length-1?'is-active':''}" data-cont="${name}" aria-pressed="${i===wanted.length-1?'true':'false'}">${name}</button>`
+  // Default active = All
+  bar.innerHTML = [...chips, 'All'].map(name =>
+    `<button class="pill ${name==='All'?'is-active':''}" data-cont="${name}" aria-pressed="${name==='All'?'true':'false'}">${name}</button>`
   ).join(' ');
   head.appendChild(bar);
 
   bar.addEventListener('click', e => {
     const btn = e.target.closest('button[data-cont]');
     if (!btn) return;
-    bar.querySelectorAll('button').forEach(b=>{
-      const active = b===btn;
+    bar.querySelectorAll('button').forEach(b => {
+      const active = b === btn;
       b.classList.toggle('is-active', active);
-      b.setAttribute('aria-pressed', active ? 'true':'false');
+      b.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
+
     const sel = btn.dataset.cont;
     data.current = sel === 'All'
       ? [...data.original]
       : data.original.filter(r => r.continent === sel);
+
     sorter.applySortOn(data.current);
   });
 }
 
+// --- public mount ---
 export function mountMostTable(rows) {
   const section = document.getElementById('most');
   const table   = section?.querySelector('#holiday-table');
   const tbody   = table?.querySelector('tbody');
   if (!tbody) return;
 
-  // normalize continent field
+  // Normalize continent and keep both original & current views
   const normalized = rows.map(r => ({ ...r, continent: normCont(r.continent) }));
-
   const data = { original: normalized, current: [...normalized] };
 
-  // default: sort by holidays desc
+  // default render: holidays desc
   data.current.sort((a,b) => (b.holidays ?? -Infinity) - (a.holidays ?? -Infinity));
   renderRows(tbody, data.current);
 
+  // sorting + filters
   const sorter = setupSorting(table, data);
   sorter.applySortOn(data.current);
-
   makeFilterBar(section, data, sorter);
 }
