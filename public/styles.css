@@ -342,7 +342,7 @@ header {
   border-top-color: #111827;
 }
 
-#most {
+section#most.card {
   margin-top: 60px;
 }
 
