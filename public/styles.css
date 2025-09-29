@@ -218,6 +218,11 @@ header {
   color: #fff;
 }
 
+.pill {
+    padding: 6px 10px;
+    margin-right: 5px;
+}
+
 /* Rows */
 .rows .row {
   display: grid;
