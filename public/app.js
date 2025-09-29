@@ -1,6 +1,7 @@
 // Holiday Atlas app.js — YEAR views + List/Calendar (national-only) + Long Weekend tags/overlay + chip→map hover
 
 import { normalizeCodeList } from '/utils/country-codes.js';
+import { mountMostTable } from './most-table.js';
 
 function buildNameToIso2() {
   const map = new Map();
@@ -894,6 +895,17 @@ function buildNameToIso2() {
       chart.redraw();
       setLoading(false);
     }
+
+    // Build rows from the same data the map uses and mount the table
+    const tableRows = Object.keys(TOTALS).map(iso2 => ({
+      country: TOTALS[iso2]?.name || iso2,
+      iso2,
+      holidays: (NAT_COUNTS.has(iso2)
+        ? NAT_COUNTS.get(iso2)
+        : (Number.isFinite(TOTALS[iso2]?.national) ? TOTALS[iso2].national : 0))
+    }));
+    // Show the table under #most (no extra fetches)
+    mountMostTable(tableRows);
 
     // Painter for Next N
     window.haColorCountries = function (iso2UpperList, itemsFlat = [], countsByIso2 = new Map()) {
