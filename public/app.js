@@ -546,6 +546,41 @@ function buildNameToIso2() {
     const topology = await fetch('https://code.highcharts.com/mapdata/custom/world-robinson-highres.geo.json')
       .then(r => r.json());
 
+    // ===== CONTINENT LOOKUP (from topo + code list) ===========================
+    function normCont(raw) {
+      const v = String(raw || '').trim().toUpperCase();
+      if (!v) return 'Other';
+      if (v === 'AFRICA' || v.includes('AFRICA')) return 'Africa';
+      if (v === 'ASIA' || v.includes('ASIA') || v.includes('MIDDLE EAST')) return 'Asia';
+      if (v === 'EUROPE' || v.includes('EUROPE')) return 'Europe';
+      if (v === 'NORTH AMERICA' || v.includes('NORTH AMERICA') || v.includes('CARIBBEAN') || v.includes('CENTRAL AMERICA')) return 'North America';
+      if (v === 'SOUTH AMERICA' || v.includes('SOUTH AMERICA')) return 'South America';
+      if (v === 'OCEANIA' || v.includes('OCEANIA') || v.includes('AUSTRALIA') || v.includes('PACIFIC')) return 'Oceania';
+      return 'Other';
+    }
+
+    // Build from topo (no extra calls)
+    const contFromTopo = new Map();
+    try {
+      const feats = (topology && topology.features) || [];
+      for (const f of feats) {
+        const p = (f && f.properties) || {};
+        const iso2 = String(p['iso-a2'] || p['hc-key'] || p['iso_a2'] || p['country-key'] || '').toUpperCase();
+        const rawRegion = p['continent'] || p['region-un'] || p['region'] || p['region-wb'] || p['subregion'] || '';
+        if (iso2.length === 2) contFromTopo.set(iso2, normCont(rawRegion));
+      }
+    } catch { /* ignore */ }
+
+    // Fallback from your country code list
+    const codeList = normalizeCodeList?.() || {};
+    const contFromCodes = new Map(
+      Object.entries(codeList).map(([k, v]) => [String(k).toUpperCase(), normCont(v?.continent || v?.region)])
+    );
+
+    // Unified getter
+    const getContinent = (iso2) => contFromTopo.get(iso2) || contFromCodes.get(iso2) || 'Other';
+    // ========================================================================
+
     // 4) Render map
     const chart = Highcharts.mapChart('wpr-map', {
       chart: {
@@ -895,11 +930,6 @@ function buildNameToIso2() {
       chart.redraw();
       setLoading(false);
     }
-
-    const codeList = normalizeCodeList?.() || {};
-    const continentByIso2 = Object.fromEntries(
-      Object.entries(codeList).map(([k, v]) => [k.toUpperCase(), v?.continent || v?.region || 'Other'])
-    );
 
     const tableRows = Object.keys(TOTALS).map(iso2 => ({
       country: TOTALS[iso2]?.name || iso2,
