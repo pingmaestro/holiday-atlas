@@ -51,9 +51,6 @@ import { mountMostTable } from './most-table.js';
   const loadingEl     = document.getElementById('view-loading');
   const detailsTabsEl = document.querySelector('.details-views'); // List/Calendar pills
 
-  setDetailsPanelVisible(false);
-  showDetailsTabs(false);
-
   function setDetailsPanelVisible(show) {
     const panel = detailsBody?.closest('.card') || detailsBody?.parentElement;
     if (panel) panel.hidden = !show;
@@ -63,6 +60,9 @@ import { mountMostTable } from './most-table.js';
     if (regionList) regionList.hidden = !show;
   }
   const showDetailsTabs = (show) => { if (detailsTabsEl) detailsTabsEl.hidden = !show; };
+
+  setDetailsPanelVisible(false);
+  showDetailsTabs(false);
 
   // ---- Country list helpers (can see TOTALS after load) ----
   function countryNameFromISO2(iso2) {
