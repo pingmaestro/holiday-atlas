@@ -896,16 +896,21 @@ function buildNameToIso2() {
       setLoading(false);
     }
 
-    // Build rows from the same data the map uses and mount the table
+    const codeList = normalizeCodeList?.() || {}; // defensive
+    const continentByIso2 = Object.fromEntries(
+      Object.entries(codeList).map(([k, v]) => [k.toUpperCase(), v?.continent || v?.region || 'Other'])
+    );
+
     const tableRows = Object.keys(TOTALS).map(iso2 => ({
       country: TOTALS[iso2]?.name || iso2,
       iso2,
       holidays: (NAT_COUNTS.has(iso2)
         ? NAT_COUNTS.get(iso2)
-        : (Number.isFinite(TOTALS[iso2]?.national) ? TOTALS[iso2].national : 0))
+        : (Number.isFinite(TOTALS[iso2]?.national) ? TOTALS[iso2].national : 0)),
+      continent: continentByIso2[iso2] || 'Other'
     }));
-    // Show the table under #most (no extra fetches)
     mountMostTable(tableRows);
+    reapplySelectionIfAllYear(); // keep highlight if any
 
     // Painter for Next N
     window.haColorCountries = function (iso2UpperList, itemsFlat = [], countsByIso2 = new Map()) {
