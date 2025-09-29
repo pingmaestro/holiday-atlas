@@ -51,6 +51,9 @@ import { mountMostTable } from './most-table.js';
   const loadingEl     = document.getElementById('view-loading');
   const detailsTabsEl = document.querySelector('.details-views'); // List/Calendar pills
 
+  setDetailsPanelVisible(false);
+  showDetailsTabs(false);
+
   function setDetailsPanelVisible(show) {
     const panel = detailsBody?.closest('.card') || detailsBody?.parentElement;
     if (panel) panel.hidden = !show;
