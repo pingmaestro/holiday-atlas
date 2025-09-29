@@ -896,7 +896,7 @@ function buildNameToIso2() {
       setLoading(false);
     }
 
-    const codeList = normalizeCodeList?.() || {}; // defensive
+    const codeList = normalizeCodeList?.() || {};
     const continentByIso2 = Object.fromEntries(
       Object.entries(codeList).map(([k, v]) => [k.toUpperCase(), v?.continent || v?.region || 'Other'])
     );
@@ -910,7 +910,7 @@ function buildNameToIso2() {
       continent: continentByIso2[iso2] || 'Other'
     }));
     mountMostTable(tableRows);
-    reapplySelectionIfAllYear(); // keep highlight if any
+    reapplySelectionIfAllYear(); 
 
     // Painter for Next N
     window.haColorCountries = function (iso2UpperList, itemsFlat = [], countsByIso2 = new Map()) {
