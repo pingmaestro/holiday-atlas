@@ -1195,4 +1195,8 @@ import { mountMostTable } from './most-table.js';
       showNext(30);
     }, { capture: true });
   }
+
+  window.TOTALS = TOTALS;
+  document.dispatchEvent(new Event('totals-ready'));
+
 })();
