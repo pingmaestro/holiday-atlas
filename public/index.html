@@ -84,135 +84,39 @@
           </div>
         </section>
 
-        <section id="busy" class="section busy-dates">
-          <div class="section-head">
-            <h2 class="section-title">World Holiday Calendar — Busiest Dates</h2>
-            <div class="section-subtitle">Each square is a day of the year; color = number of countries with a national holiday.</div>
-          </div>
-
-          <!-- Legend -->
-          <div class="heat-legend" aria-hidden="false">
-            <div class="legend-scale" role="img" aria-label="Color scale from few to many holidays"></div>
-            <div class="legend-ticks">
-              <span>0</span>
-              <span>1</span>
-              <span>5</span>
-              <span>10</span>
-              <span>20</span>
-              <span>40+</span>
+        <section id="busy" class="section">
+          <div class="card">
+            <div class="section-head">
+              <h2 class="section-title">World Holiday Calendar — Busiest Dates</h2>
+              <div class="section-subtitle">Same calendar layout; each date is colored by how many countries celebrate that day.</div>
             </div>
-            <div class="legend-captions">
-              <span>Fewer</span>
-              <span>More</span>
+
+            <!-- Legend -->
+            <div class="cal-legend">
+              <div class="cal-legend__scale" role="img" aria-label="Color scale from fewer to more holidays"></div>
+              <div class="cal-legend__ticks"><span>0</span><span>1</span><span>5</span><span>10</span><span>20</span><span>40+</span></div>
             </div>
+
+            <!-- 12 month cards (same structure/naming as your country calendar) -->
+            <div class="cal-year">
+              <!-- Repeat this month block 12x; JS will fill days -->
+              <section class="cal-month" aria-label="January">
+                <header class="cal-month__head">
+                  <h3 class="cal-month__name">January 2025</h3>
+                  <div class="cal-dow">S M T W T F S</div>
+                </header>
+                <div class="cal-grid" role="grid">
+                  <!-- JS inserts <button class="cal-day heat-bX" data-count="…" title="…"><span class="cal-day__num">1</span></button> -->
+                </div>
+              </section>
+
+              <!-- … February → December blocks (same markup, empty .cal-grid) … -->
+            </div>
+
+            <!-- Tooltip (optional; JS positions/updates) -->
+            <div id="busy-tip" class="heat-tip" hidden></div>
           </div>
-
-          <!-- Calendar grid (months) -->
-          <div class="heat-calendar" role="grid" aria-label="Busiest holiday dates heatmap by month">
-            <!-- 12 months; JS will fill each .month-grid with day cells -->
-            <section class="month" aria-label="January" role="rowgroup">
-              <header class="month-head">
-                <h3 class="month-name">January</h3>
-                <div class="dow">S M T W T F S</div>
-              </header>
-              <div class="month-grid" role="grid">
-                <!-- JS inserts <button class="day bin-X" ...> -->
-              </div>
-            </section>
-
-            <section class="month" aria-label="February" role="rowgroup">
-              <header class="month-head">
-                <h3 class="month-name">February</h3>
-                <div class="dow">S M T W T F S</div>
-              </header>
-              <div class="month-grid" role="grid"></div>
-            </section>
-
-            <section class="month" aria-label="March" role="rowgroup">
-              <header class="month-head">
-                <h3 class="month-name">March</h3>
-                <div class="dow">S M T W T F S</div>
-              </header>
-              <div class="month-grid" role="grid"></div>
-            </section>
-
-            <section class="month" aria-label="April" role="rowgroup">
-              <header class="month-head">
-                <h3 class="month-name">April</h3>
-                <div class="dow">S M T W T F S</div>
-              </header>
-              <div class="month-grid" role="grid"></div>
-            </section>
-
-            <section class="month" aria-label="May" role="rowgroup">
-              <header class="month-head">
-                <h3 class="month-name">May</h3>
-                <div class="dow">S M T W T F S</div>
-              </header>
-              <div class="month-grid" role="grid"></div>
-            </section>
-
-            <section class="month" aria-label="June" role="rowgroup">
-              <header class="month-head">
-                <h3 class="month-name">June</h3>
-                <div class="dow">S M T W T F S</div>
-              </header>
-              <div class="month-grid" role="grid"></div>
-            </section>
-
-            <section class="month" aria-label="July" role="rowgroup">
-              <header class="month-head">
-                <h3 class="month-name">July</h3>
-                <div class="dow">S M T W T F S</div>
-              </header>
-              <div class="month-grid" role="grid"></div>
-            </section>
-
-            <section class="month" aria-label="August" role="rowgroup">
-              <header class="month-head">
-                <h3 class="month-name">August</h3>
-                <div class="dow">S M T W T F S</div>
-              </header>
-              <div class="month-grid" role="grid"></div>
-            </section>
-
-            <section class="month" aria-label="September" role="rowgroup">
-              <header class="month-head">
-                <h3 class="month-name">September</h3>
-                <div class="dow">S M T W T F S</div>
-              </header>
-              <div class="month-grid" role="grid"></div>
-            </section>
-
-            <section class="month" aria-label="October" role="rowgroup">
-              <header class="month-head">
-                <h3 class="month-name">October</h3>
-                <div class="dow">S M T W T F S</div>
-              </header>
-              <div class="month-grid" role="grid"></div>
-            </section>
-
-            <section class="month" aria-label="November" role="rowgroup">
-              <header class="month-head">
-                <h3 class="month-name">November</h3>
-                <div class="dow">S M T W T F S</div>
-              </header>
-              <div class="month-grid" role="grid"></div>
-            </section>
-
-            <section class="month" aria-label="December" role="rowgroup">
-              <header class="month-head">
-                <h3 class="month-name">December</h3>
-                <div class="dow">S M T W T F S</div>
-              </header>
-              <div class="month-grid" role="grid"></div>
-            </section>
-          </div>
-
-          <!-- Tooltip (filled by JS on hover/focus) -->
-          <div id="busy-tip" class="heat-tip" role="status" aria-live="polite" hidden></div>
         </section>
-
 
         <section id="month">
           <h2>Holidays by Month/Season</h2>
