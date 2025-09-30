@@ -278,11 +278,16 @@ header {
   gap: 4px;
 }
 .cal-dow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr); /* 7 equal columns */
+  gap: 4px; /* same as .cal-grid gap */
   text-align: center;
   color: var(--muted);
   font-weight: 600;
-  padding: 4px 0;
+  font-size: 11px;
+  margin-bottom: 4px;
 }
+
 .cal-day {
   height: 28px;
   line-height: 28px;
