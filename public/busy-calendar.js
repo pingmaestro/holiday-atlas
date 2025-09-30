@@ -1,35 +1,31 @@
+// busy-calendar.js — Busiest Dates calendar using your existing .year-cal UI
+
 (function () {
-  const monthNames = [
-    'January','February','March','April','May','June',
-    'July','August','September','October','November','December'
-  ];
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const HEAT = ['heat-b0','heat-b1','heat-b2','heat-b3','heat-b4','heat-b5','heat-b6','heat-b7','heat-b8','heat-b9'];
 
-  // Build the calendar as soon as DOM is ready
-  document.addEventListener('DOMContentLoaded', init);
-  // If app.js fires an event when data is ready, we’ll recolor immediately
-  document.addEventListener('totals-ready', applyHeatIfAvailable);
-
-  // Fallback: light polling in case you don’t dispatch totals-ready
-  let pollId = null, tries = 0, MAX_TRIES = 40; // ~20s max
-  function startPolling() {
-    if (pollId) return;
-    pollId = setInterval(() => {
-      if (applyHeatIfAvailable() || ++tries >= MAX_TRIES) {
-        clearInterval(pollId); pollId = null;
-      }
-    }, 500);
-  }
-
-  function init() {
-    const host = document.querySelector('#busy .cal-year');
+  document.addEventListener('DOMContentLoaded', () => {
+    const host = document.querySelector('#busy .year-cal, #busy .cal-year') || ensureHost();
     if (!host) return;
 
     const YEAR = getYear();
-    buildFullCalendar(host, YEAR);     // ✅ always render the full calendar (no data needed)
-    if (!applyHeatIfAvailable()) {     // try to color now…
-      startPolling();                  // …or wait briefly for TOTALS
-    }
+    buildCalendar(host, YEAR);          // always render the grid
+    applyHeatIfAvailable(YEAR);         // paint now if TOTALS is ready
+    // react fast if app.js dispatches totals-ready
+    document.addEventListener('totals-ready', () => applyHeatIfAvailable(YEAR));
+    // fallback polling if no event is dispatched
+    let tries = 0, t = setInterval(() => {
+      if (applyHeatIfAvailable(YEAR) || ++tries > 40) clearInterval(t);
+    }, 500);
+  });
+
+  function ensureHost() {
+    const card = document.querySelector('#busy .card');
+    if (!card) return null;
+    const div = document.createElement('div');
+    div.className = 'year-cal'; // uses your CSS
+    card.appendChild(div);
+    return div;
   }
 
   function getYear() {
@@ -37,51 +33,50 @@
     return Number.isInteger(y) && y >= 1900 && y <= 2100 ? y : new Date().getFullYear();
   }
 
-  function buildFullCalendar(host, YEAR) {
-    host.innerHTML = ''; // overwrite any partial markup
+  function buildCalendar(host, YEAR) {
+    host.innerHTML = '';
     for (let m = 0; m < 12; m++) {
       const sec = document.createElement('section');
       sec.className = 'cal-month';
-      sec.setAttribute('aria-label', monthNames[m]);
 
-      const head = document.createElement('header');
-      head.className = 'cal-month__head';
-      head.innerHTML = `
-        <h3 class="cal-month__name">${monthNames[m]} ${YEAR}</h3>
-        <div class="cal-dow">S M T W T F S</div>
-      `;
-      sec.appendChild(head);
+      const h = document.createElement('h4');
+      h.textContent = `${MONTHS[m]} ${YEAR}`;
+      sec.appendChild(h);
+
+      const dow = document.createElement('div');
+      dow.className = 'cal-dow';
+      dow.textContent = 'S  M  T  W  T  F  S';
+      sec.appendChild(dow);
 
       const grid = document.createElement('div');
       grid.className = 'cal-grid';
 
       const first = new Date(YEAR, m, 1);
-      const startDow = first.getDay();               // 0=Sun..6=Sat
-      const daysInMonth = new Date(YEAR, m+1, 0).getDate();
+      const startDow = first.getDay(); // 0..6 (Sun..Sat)
+      const daysInMonth = new Date(YEAR, m + 1, 0).getDate();
 
-      // Leading blanks to align the first day
+      // leading blanks
       for (let i = 0; i < startDow; i++) {
         const blank = document.createElement('div');
-        blank.className = 'cal-day is-empty';
+        blank.className = 'cal-day muted';
+        blank.textContent = '';
         grid.appendChild(blank);
       }
 
-      // Actual days
+      // actual days
       for (let d = 1; d <= daysInMonth; d++) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'cal-day heat-b0';           // neutral by default
-        btn.dataset.date = yyyyMmDd(YEAR, m+1, d);   // saves YYYY-MM-DD
-        btn.title = `${monthNames[m]} ${d} — 0 countries celebrate`;
+        const el = document.createElement('div');
+        el.className = 'cal-day heat-b0'; // neutral by default
+        el.dataset.date = `${YEAR}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        el.textContent = d;
 
-        if (isToday(YEAR, m, d)) btn.classList.add('is-today');
+        // today highlight (your CSS uses .today)
+        const t = new Date();
+        if (YEAR === t.getFullYear() && m === t.getMonth() && d === t.getDate()) {
+          el.classList.add('today');
+        }
 
-        const n = document.createElement('span');
-        n.className = 'cal-day__num';
-        n.textContent = d;
-        btn.appendChild(n);
-
-        grid.appendChild(btn);
+        grid.appendChild(el);
       }
 
       sec.appendChild(grid);
@@ -89,80 +84,59 @@
     }
   }
 
-  function isToday(y, m, d) {
-    const t = new Date();
-    return y === t.getFullYear() && m === t.getMonth() && d === t.getDate();
-  }
-  function yyyyMmDd(y, m, d) {
-    return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-  }
+  function applyHeatIfAvailable(YEAR) {
+    if (!window.TOTALS || !Object.keys(window.TOTALS).length) return false;
 
-  // Try to apply heat if data exists; return true if applied
-  function applyHeatIfAvailable() {
-    if (!hasTotals()) return false;
-    const YEAR = getYear();
-    const countsByDate = buildCounts(window.TOTALS, YEAR);
-    colorizeFromCounts(countsByDate, YEAR);
+    const counts = tallyCounts(window.TOTALS, YEAR);
+    const days = document.querySelectorAll('#busy .cal-day[data-date]');
+    for (const el of days) {
+      // wipe any prior heat class
+      for (const h of HEAT) el.classList.remove(h);
+
+      const date = el.dataset.date;
+      const n = counts[date] || 0;
+      el.classList.add(countToBin(n));
+      el.title = `${fmtDate(date)} — ${n} ${n === 1 ? 'country' : 'countries'} celebrate`;
+    }
     return true;
   }
 
-  function hasTotals() {
-    return typeof window.TOTALS === 'object' && window.TOTALS && Object.keys(window.TOTALS).length > 0;
-  }
-
-  // Reduce TOTALS → dateStr -> count (national/public only)
-  function buildCounts(TOTALS, YEAR) {
-    const counts = Object.create(null);
+  function tallyCounts(TOTALS, YEAR) {
+    const map = Object.create(null);
     for (const [, rec] of Object.entries(TOTALS)) {
       const days = Array.isArray(rec?.days) ? rec.days : [];
-      for (const day of days) {
-        const dateStr = String(day?.date || '');
-        if (!dateStr.startsWith(String(YEAR))) continue;
-        if (!isNationalHoliday(day)) continue;
-        counts[dateStr] = (counts[dateStr] || 0) + 1;
+      for (const d of days) {
+        const ds = String(d?.date || '');
+        if (!ds.startsWith(String(YEAR))) continue;
+        if (!isNational(d)) continue;
+        map[ds] = (map[ds] || 0) + 1;
       }
     }
-    return counts;
+    return map;
   }
 
-  // Tweak this if your fields differ
-  function isNationalHoliday(day) {
+  // Adjust if your fields differ
+  function isNational(day) {
     const t = String(day?.type || day?.types || '').toLowerCase();
     const scope = String(day?.scope || day?.level || '').toLowerCase();
-    return (
-      day?.national === true ||
-      scope.includes('national') ||
-      t.includes('national') ||
-      t.includes('public')
-    );
+    return day?.national === true || scope.includes('national') || t.includes('national') || t.includes('public');
   }
 
-  function colorizeFromCounts(countsByDate, YEAR) {
-    const days = document.querySelectorAll('#busy .cal-day:not(.is-empty)');
-    for (const el of days) {
-      // wipe old heat classes
-      for (const cls of HEAT) el.classList.remove(cls);
-
-      const dateStr = el.dataset.date;
-      const count = countsByDate[dateStr] || 0;
-      el.classList.add(countToBin(count));
-      const d = Number(dateStr.slice(-2));
-      const mIdx = Number(dateStr.slice(5,7)) - 1;
-      el.title = `${monthNames[mIdx]} ${d} — ${count} ${count === 1 ? 'country' : 'countries'} celebrate`;
-    }
-  }
-
-  // Keep in sync with your CSS
-  function countToBin(count) {
-    if (count === 0) return 'heat-b0';
-    if (count === 1) return 'heat-b1';
-    if (count <= 4) return 'heat-b2';
-    if (count <= 9) return 'heat-b3';
-    if (count <= 14) return 'heat-b4';
-    if (count <= 19) return 'heat-b5';
-    if (count <= 29) return 'heat-b6';
-    if (count <= 39) return 'heat-b7';
-    if (count <= 59) return 'heat-b8';
+  function countToBin(n) {
+    if (n === 0) return 'heat-b0';
+    if (n === 1) return 'heat-b1';
+    if (n <= 4) return 'heat-b2';
+    if (n <= 9) return 'heat-b3';
+    if (n <= 14) return 'heat-b4';
+    if (n <= 19) return 'heat-b5';
+    if (n <= 29) return 'heat-b6';
+    if (n <= 39) return 'heat-b7';
+    if (n <= 59) return 'heat-b8';
     return 'heat-b9';
+  }
+
+  function fmtDate(yyyyMmDd) {
+    const [y,m,d] = yyyyMmDd.split('-').map(Number);
+    return `${MONTHS[m-1]} ${d}`;
   }
 })();
