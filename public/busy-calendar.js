@@ -1,16 +1,20 @@
 // busy-calendar.js — World Holiday Calendar (Busiest Dates)
-// Drop-in, ultra-robust: flexible data sniffing + strict→permissive fallback + inline debug panel.
+// Builds a full-year grid and heat-shades each date by # of countries with a NATIONAL/PUBLIC holiday.
+// Works with either:
+//   A) window.TOTALS where each country record has day objects (rec.days),
+//   B) or just country counts — in which case we hydrate per-day data via /api/holidayDetails.
+//
 // Uses your existing CSS classes: .year-cal, .cal-month, h4, .cal-dow, .cal-grid, .cal-day
+// Heat classes expected: .heat-b0 … .heat-b9  and .holiday
 
 (function () {
   'use strict';
 
-  const QS = new URLSearchParams(location.search);
-  const FORCE_DEBUG = QS.get('debug') === '1';
-  const FORCE_ALL   = QS.get('all') === '1';
-
   const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const HEAT   = ['heat-b0','heat-b1','heat-b2','heat-b3','heat-b4','heat-b5','heat-b6','heat-b7','heat-b8','heat-b9'];
+
+  const QS = new URLSearchParams(location.search);
+  const FORCE_DEBUG = QS.get('debug') === '1';
 
   document.addEventListener('DOMContentLoaded', () => {
     const host = document.querySelector('#busy .year-cal') || ensureHost();
@@ -20,21 +24,52 @@
     buildCalendar(host, YEAR);
 
     // Try immediately; otherwise wait/poll for TOTALS to exist
-    if (!applyHeatWithFallback(YEAR)) {
-      document.addEventListener('totals-ready', () => applyHeatWithFallback(YEAR));
+    if (!bootstrap(YEAR)) {
+      document.addEventListener('totals-ready', () => bootstrap(YEAR));
       let tries = 0;
       const t = setInterval(() => {
-        if (applyHeatWithFallback(YEAR) || ++tries > 60) clearInterval(t); // ~30s
+        if (bootstrap(YEAR) || ++tries > 60) clearInterval(t); // ~30s
       }, 500);
     }
   });
 
+  // ---------------------- Boot flow ----------------------
+  function bootstrap(YEAR) {
+    const totals = window.TOTALS;
+    if (!totals || !Object.keys(totals).length) {
+      showDebug({year: YEAR, note: 'TOTALS not ready or empty.', counts: {}, stage: 'waiting'});
+      return false;
+    }
+
+    // First, try to color using in-memory TOTALS if it already carries per-day arrays.
+    const directCountsStrict = buildCountsFromTotals(totals, YEAR, /*permissive=*/false);
+    const directCountsPerm   = Object.keys(directCountsStrict).length ? directCountsStrict
+                                 : buildCountsFromTotals(totals, YEAR, /*permissive=*/true);
+
+    if (sumValues(directCountsPerm) > 0) {
+      colorize(directCountsPerm);
+      showDebug(summary(directCountsPerm, YEAR, {mode: directCountsPerm === directCountsStrict ? 'Strict' : 'Permissive', stage:'direct'}));
+      return true;
+    }
+
+    // If TOTALS doesn't have day lists (usual in your pipeline), hydrate per-day via /api/holidayDetails
+    hydrateFromApi(YEAR, totals).catch(()=>{}); // async, updates incrementally
+    return true; // Calendar is built; hydration will paint progressively
+  }
+
+  // ---------------------- DOM helpers ----------------------
   function ensureHost() {
     const card = document.querySelector('#busy .card');
     if (!card) return null;
     const div = document.createElement('div');
     div.className = 'year-cal';
     card.appendChild(div);
+
+    // debug panel shell
+    const dbg = document.createElement('div');
+    dbg.className = 'busy-debug';
+    dbg.style.cssText = 'margin-top:8px;font:12px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;color:#374151;';
+    card.appendChild(dbg);
     return div;
   }
 
@@ -53,6 +88,7 @@
       h4.textContent = `${MONTHS[m]} ${YEAR}`;
       sec.appendChild(h4);
 
+      // Weekday header
       const dow = document.createElement('div');
       dow.className = 'cal-dow';
       ['S','M','T','W','T','F','S'].forEach(l => {
@@ -62,22 +98,25 @@
       });
       sec.appendChild(dow);
 
+      // Days grid
       const grid = document.createElement('div');
       grid.className = 'cal-grid';
 
       const first = new Date(YEAR, m, 1);
-      const startDow = first.getDay();
+      const startDow = first.getDay(); // 0..6 (Sun..Sat)
       const daysInMonth = new Date(YEAR, m + 1, 0).getDate();
 
+      // leading blanks
       for (let i = 0; i < startDow; i++) {
         const blank = document.createElement('div');
         blank.className = 'cal-day muted';
         grid.appendChild(blank);
       }
 
+      // day cells
       for (let d = 1; d <= daysInMonth; d++) {
         const el = document.createElement('div');
-        el.className = 'cal-day heat-b0';
+        el.className = 'cal-day heat-b0'; // neutral by default
         el.dataset.date = `${YEAR}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
         el.textContent = d;
 
@@ -91,41 +130,10 @@
       sec.appendChild(grid);
       host.appendChild(sec);
     }
-
-    // Add (or reuse) a compact debug panel after the calendar
-    const parent = host.parentElement || document.querySelector('#busy .card') || host;
-    if (!parent.querySelector('.busy-debug')) {
-      const dbg = document.createElement('div');
-      dbg.className = 'busy-debug';
-      dbg.style.cssText = 'margin-top:8px;font:12px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;color:#374151;';
-      parent.appendChild(dbg);
-    }
   }
 
-  // Try strict; if nothing, auto-fallback to permissive (unless user forced strict)
-  function applyHeatWithFallback(YEAR) {
-    const totals = window.TOTALS;
-    if (!totals || !Object.keys(totals).length) {
-      showDebug({year: YEAR, note: 'TOTALS not ready or empty.', counts: {}});
-      return false;
-    }
-
-    const strict = buildCounts(totals, YEAR, /*permissive=*/FORCE_ALL ? true : false);
-    if (sumValues(strict) > 0 || FORCE_ALL) {
-      colorize(strict);
-      showDebug(summary(strict, YEAR, /*permissive=*/FORCE_ALL));
-      return true;
-    }
-
-    // Strict found nothing -> fallback permissive
-    const fallback = buildCounts(totals, YEAR, /*permissive=*/true);
-    colorize(fallback);
-    showDebug(summary(fallback, YEAR, /*permissive=*/true, 'Fallback to permissive (no national/public metadata detected).'));
-    return true;
-  }
-
-  // Flexible extractor + filter -> { 'YYYY-MM-DD': count }
-  function buildCounts(TOTALS, YEAR, permissive) {
+  // ---------------------- Direct-from-TOTALS path ----------------------
+  function buildCountsFromTotals(TOTALS, YEAR, permissive) {
     const map = Object.create(null);
 
     for (const [, rec] of Object.entries(TOTALS)) {
@@ -143,39 +151,128 @@
     return map;
   }
 
-  // Heuristics to locate a YEAR's holidays array inside varied record shapes
   function findYearDays(rec, YEAR) {
     if (!rec) return [];
-
-    // Common
-    if (Array.isArray(rec.days)) return rec.days;
-
-    // Alternative field names
-    if (Array.isArray(rec.holidays)) return rec.holidays;
-    if (Array.isArray(rec.list)) return rec.list;
-    if (Array.isArray(rec.items)) return rec.items;
-    if (Array.isArray(rec.data)) return rec.data;
-
-    // Nested by year
+    if (Array.isArray(rec.days))      return rec.days;
+    if (Array.isArray(rec.holidays))  return rec.holidays;
+    if (Array.isArray(rec.list))      return rec.list;
+    if (Array.isArray(rec.items))     return rec.items;
+    if (Array.isArray(rec.data))      return rec.data;
     if (rec.daysByYear && Array.isArray(rec.daysByYear[YEAR])) return rec.daysByYear[YEAR];
-    if (rec.byYear && Array.isArray(rec.byYear[YEAR])) return rec.byYear[YEAR];
-
-    // Sometimes the year key is directly an array
+    if (rec.byYear     && Array.isArray(rec.byYear[YEAR]))     return rec.byYear[YEAR];
     if (Array.isArray(rec[YEAR])) return rec[YEAR];
 
-    // Last resort: try to flatten any arrays inside the record that look like day objects/strings for that YEAR
+    // last resort: collect arrays from values & keep the ones matching YEAR
     const candidates = [];
-    for (const v of Object.values(rec)) {
-      if (Array.isArray(v)) candidates.push(...v);
-    }
-    // Keep only entries that can be normalized to the target YEAR
+    for (const v of Object.values(rec)) if (Array.isArray(v)) candidates.push(...v);
     return candidates.filter(x => {
       const ds = normalizeDate(x);
       return ds && String(ds).startsWith(String(YEAR));
     });
   }
 
-  // Paint days based on counts
+  // ---------------------- Hydrate-from-API path ----------------------
+  async function hydrateFromApi(YEAR, totals) {
+    const iso2s = Object.keys(totals || {}).map(s => String(s).toUpperCase()).filter(k => k.length === 2);
+    const cacheKey = `wcal:${YEAR}:v1`;
+    const cached = sessionStorage.getItem(cacheKey);
+
+    // Fast path: session cache
+    if (cached) {
+      try {
+        const counts = JSON.parse(cached) || {};
+        if (sumValues(counts) > 0) {
+          colorize(counts);
+          showDebug(summary(counts, YEAR, {mode:'Strict', stage:'cache', note:'Loaded from session cache.'}));
+          return;
+        }
+      } catch { /* ignore bad cache */ }
+    }
+
+    // Progressive build with a small worker pool
+    const counts = Object.create(null);
+    let processed = 0, nationals = 0;
+    const POOL = 8;
+    let i = 0;
+
+    showDebug({year: YEAR, stage:'fetch', mode:'Strict', progress: `0 / ${iso2s.length}`, nonZeroDays: 0, max: 0, top: []});
+
+    async function worker() {
+      while (i < iso2s.length) {
+        const iso2 = iso2s[i++];
+        try {
+          const url = `/api/holidayDetails?iso2=${iso2}&year=${YEAR}`;
+          const r = await fetch(url, { cache: 'no-store' });
+          if (!r.ok) throw new Error(String(r.status));
+          const j = await r.json();
+          const list = Array.isArray(j.holidays) ? j.holidays : [];
+
+          for (const day of list) {
+            const dateStr = normalizeDate(day);
+            if (!dateStr || !dateStr.startsWith(String(YEAR))) continue;
+            if (!isNational(day)) continue; // strict by default
+            counts[dateStr] = (counts[dateStr] || 0) + 1;
+            nationals++;
+          }
+        } catch {
+          // ignore this iso2 on failure
+        } finally {
+          processed++;
+          if (processed % 6 === 0 || processed === iso2s.length) {
+            // incremental paint + progress
+            colorize(counts);
+            showDebug(summary(counts, YEAR, {mode:'Strict', stage:'fetch', progress: `${processed} / ${iso2s.length}`}));
+          }
+        }
+      }
+    }
+
+    await Promise.all(Array.from({length: POOL}, worker));
+
+    // If still empty, do a permissive pass (count all holidays regardless of metadata)
+    if (sumValues(counts) === 0) {
+      let processed2 = 0;
+      showDebug({year: YEAR, stage:'fetch', mode:'Permissive', note:'No national/public flags found; counting all holidays.', progress:`0 / ${iso2s.length}`});
+      const countsAll = Object.create(null);
+      i = 0;
+
+      async function worker2() {
+        while (i < iso2s.length) {
+          const iso2 = iso2s[i++];
+          try {
+            const r = await fetch(`/api/holidayDetails?iso2=${iso2}&year=${YEAR}`, { cache: 'no-store' });
+            if (!r.ok) throw new Error(String(r.status));
+            const j = await r.json();
+            const list = Array.isArray(j.holidays) ? j.holidays : [];
+            for (const day of list) {
+              const dateStr = normalizeDate(day);
+              if (!dateStr || !dateStr.startsWith(String(YEAR))) continue;
+              countsAll[dateStr] = (countsAll[dateStr] || 0) + 1;
+            }
+          } catch { /* ignore */ }
+          finally {
+            processed2++;
+            if (processed2 % 6 === 0 || processed2 === iso2s.length) {
+              colorize(countsAll);
+              showDebug(summary(countsAll, YEAR, {mode:'Permissive', stage:'fetch', progress: `${processed2} / ${iso2s.length}`}));
+            }
+          }
+        }
+      }
+      await Promise.all(Array.from({length: POOL}, worker2));
+
+      // cache permissive if non-empty
+      if (sumValues(countsAll) > 0) {
+        try { sessionStorage.setItem(cacheKey, JSON.stringify(countsAll)); } catch {}
+      }
+      return;
+    }
+
+    // cache strict if non-empty
+    try { sessionStorage.setItem(cacheKey, JSON.stringify(counts)); } catch {}
+  }
+
+  // ---------------------- Paint ----------------------
   function colorize(countsByDate) {
     const nodes = document.querySelectorAll('#busy .cal-day[data-date]');
     for (const el of nodes) {
@@ -191,19 +288,18 @@
     }
   }
 
-  // ---- Helpers ----
-
+  // ---------------------- Helpers ----------------------
   function normalizeDate(day) {
     if (day == null) return null;
 
-    // If raw string/number/Date
+    // raw string/number/Date
     if (typeof day === 'string' || typeof day === 'number' || day instanceof Date) {
       const dt = new Date(day);
       if (isNaN(dt)) return null;
       return ymd(dt);
     }
 
-    // Object: try common properties
+    // objects from /api/holidayDetails likely have { date:'YYYY-MM-DD', global:true }
     const raw = day.date || day.observed || day.iso || day.datetime || day.on || day.when || day.start;
     if (!raw) return null;
     const dt = new Date(raw);
@@ -219,12 +315,12 @@
   }
 
   function isNational(day) {
-    // Nager style
+    // Nager: global === true means nationwide; counties listed => regional only
     if (day && typeof day === 'object') {
       if (day.global === true) return true;
       if (Array.isArray(day.counties) && day.counties.length > 0) return false;
     }
-    // Calendarific/mixed
+    // Calendarific/mixed: type(s) may include 'National holiday' or 'Public'
     const typesJoined = Array.isArray(day?.types) ? day.types.join(' ') : (day?.type || day?.holidayType || '');
     const t = String(typesJoined).toLowerCase();
 
@@ -235,7 +331,6 @@
     if (day?.national === true) return true;
     if (t.includes('national') || t.includes('public')) return true;
 
-    // If no metadata at all but also no counties, be conservative (strict mode will drop it)
     return false;
   }
 
@@ -261,21 +356,22 @@
     let s = 0; for (const v of Object.values(obj)) s += v || 0; return s;
   }
 
-  function summary(counts, YEAR, permissive, extraNote) {
+  function summary(counts, YEAR, {mode='Strict', stage='direct', progress='', note} = {}) {
     const vals = Object.entries(counts);
     vals.sort((a,b) => b[1]-a[1]);
     const nonZero = vals.filter(([,n]) => n>0);
     const max = nonZero.length ? nonZero[0][1] : 0;
     const top = nonZero.slice(0,12);
-
     return {
       year: YEAR,
-      permissive,
+      mode,
+      stage,
+      progress,
       max,
       nonZeroDays: nonZero.length,
       sampleDomDate: (document.querySelector('#busy .cal-day[data-date]') || {}).dataset?.date || '(none)',
       top,
-      note: extraNote
+      note
     };
   }
 
@@ -283,20 +379,21 @@
     const dbg = document.querySelector('.busy-debug');
     if (!dbg) return;
 
-    const shouldShow = FORCE_DEBUG || (info.nonZeroDays === 0) || info.note;
+    const shouldShow = FORCE_DEBUG || info.stage !== 'direct' || info.nonZeroDays === 0 || info.note || info.progress;
     if (!shouldShow) { dbg.innerHTML = ''; return; }
 
-    const head = `
+    const header = `
       <div style="padding:8px;border:1px solid #e5e7eb;border-radius:8px;background:#fafafa">
         <div style="font-weight:600;margin-bottom:6px">World Holiday Calendar — Debug</div>
-        <div>Year: <b>${info.year}</b> • Mode: <b>${info.permissive ? 'Permissive' : 'Strict'}</b> • Days with ≥1 holiday: <b>${info.nonZeroDays||0}</b> • Max/day: <b>${info.max||0}</b></div>
+        <div>Year: <b>${info.year}</b> • Mode: <b>${info.mode}</b> • Stage: <b>${info.stage}</b>${info.progress ? ` • Progress: <b>${info.progress}</b>` : ''}</div>
+        <div>Days with ≥1 holiday: <b>${info.nonZeroDays||0}</b> • Max/day: <b>${info.max||0}</b></div>
         <div style="margin-top:4px;color:#6b7280">DOM sample day: <code>${info.sampleDomDate || ''}</code></div>
         ${info.note ? `<div style="margin-top:6px;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;padding:6px;border-radius:6px">${info.note}</div>` : ''}
-        ${Array.isArray(info.top) && info.top.length ? renderTop(info.top) : '<div style="margin-top:6px;">No non-zero dates to list.</div>'}
-        <div style="margin-top:6px;color:#6b7280">Tip: add <code>?debug=1</code> to always show this panel, and <code>&all=1</code> to force permissive mode.</div>
+        ${Array.isArray(info.top) && info.top.length ? renderTop(info.top) : '<div style="margin-top:6px;">No non-zero dates yet.</div>'}
+        <div style="margin-top:6px;color:#6b7280">Tip: add <code>?debug=1</code> to always show this panel.</div>
       </div>
     `;
-    dbg.innerHTML = head;
+    dbg.innerHTML = header;
 
     function renderTop(top) {
       const rows = top.map(([d,n]) => `<tr><td style="padding:4px 8px;border-bottom:1px solid #eee;">${fmtDate(d)}</td><td style="padding:4px 8px;text-align:right;border-bottom:1px solid #eee;">${n}</td></tr>`).join('');
