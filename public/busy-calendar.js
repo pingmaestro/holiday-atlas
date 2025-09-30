@@ -1,10 +1,12 @@
 // busy-calendar.js — World Holiday Calendar (Busiest Dates)
 // Builds a full-year grid and heat-shades each date by # of countries with a NATIONAL/PUBLIC holiday.
 // Uses your existing CSS classes: .year-cal, .cal-month, h4, .cal-dow, .cal-grid, .cal-day
-// Drop-in replacement (combines your file + the improved helpers).
 
 (function () {
   'use strict';
+
+  // Turn on for console diagnostics:
+  const DEBUG = true;
 
   const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const HEAT   = ['heat-b0','heat-b1','heat-b2','heat-b3','heat-b4','heat-b5','heat-b6','heat-b7','heat-b8','heat-b9'];
@@ -22,7 +24,7 @@
       document.addEventListener('totals-ready', () => applyHeatIfAvailable(YEAR));
       let tries = 0;
       const timer = setInterval(() => {
-        if (applyHeatIfAvailable(YEAR) || ++tries > 40) clearInterval(timer);
+        if (applyHeatIfAvailable(YEAR) || ++tries > 60) clearInterval(timer); // ~30s
       }, 500);
     }
   });
@@ -98,9 +100,26 @@
 
   // ---- Heat application ----
   function applyHeatIfAvailable(YEAR) {
-    if (!window.TOTALS || !Object.keys(window.TOTALS).length) return false;
-    const counts = tallyCounts(window.TOTALS, YEAR);
+    const totals = window.TOTALS;
+    if (!totals || !Object.keys(totals).length) {
+      DEBUG && console.debug('[busy-calendar] TOTALS not ready or empty.');
+      return false;
+    }
+    const counts = tallyCounts(totals, YEAR);
     colorize(counts);
+
+    if (DEBUG) {
+      const sum = Object.values(counts).reduce((a,b)=>a+b,0);
+      const max = Math.max(0, ...Object.values(counts));
+      const nonZero = Object.keys(counts).filter(k => counts[k] > 0).length;
+      console.debug(`[busy-calendar] YEAR=${YEAR} dates with ≥1 holiday: ${nonZero}, total increments: ${sum}, max/day: ${max}`);
+      if (nonZero === 0) {
+        console.debug('[busy-calendar] No qualifying days — likely the filter is too strict for your data; see isNational().');
+      }
+      // Check that date attributes match DOM
+      const sample = document.querySelector('#busy .cal-day[data-date]');
+      if (sample) console.debug('[busy-calendar] sample DOM date attr:', sample.dataset.date);
+    }
     return true;
   }
 
@@ -112,9 +131,8 @@
       const days = Array.isArray(rec?.days) ? rec.days : [];
       for (const day of days) {
         const dateStr = normalizeDate(day);
-        if (!dateStr || !dateStr.startsWith(String(YEAR))) continue;
-        if (!isNational(day)) continue; // keep your strict nationwide/public intent
-
+        if (!dateStr || !String(dateStr).startsWith(String(YEAR))) continue;
+        if (!isNational(day)) continue;
         map[dateStr] = (map[dateStr] || 0) + 1;
       }
     }
@@ -140,29 +158,42 @@
 
   // ---- Helpers (robust across sources/pipelines) ----
 
-  // Normalize to 'YYYY-MM-DD' (supports {date}, {observed}, {iso}, {datetime})
+  // Normalize to 'YYYY-MM-DD'
+  // Supports:
+  //  - string: '2025-1-1' or '2025-01-01' or ISO datetime
+  //  - object: {date}, {observed}, {iso}, {datetime}
   function normalizeDate(day) {
-    // Exact strings
-    if (day?.date && /^\d{4}-\d{2}-\d{2}$/.test(day.date)) return day.date;
-    if (day?.observed && /^\d{4}-\d{2}-\d{2}$/.test(day.observed)) return day.observed;
+    if (day == null) return null;
 
-    // Try to parse common alt fields
-    const raw = day?.date || day?.observed || day?.iso || day?.datetime;
+    // If the entry is already a date-like string
+    if (typeof day === 'string' || typeof day === 'number') {
+      const dt = new Date(day);
+      if (isNaN(dt)) return null;
+      return ymd(dt);
+    }
+
+    // Object with common fields
+    const raw = day.date || day.observed || day.iso || day.datetime;
     if (!raw) return null;
     const dt = new Date(raw);
     if (isNaN(dt)) return null;
+    return ymd(dt);
 
-    const y = dt.getFullYear();
-    const m = String(dt.getMonth() + 1).padStart(2, '0');
-    const d = String(dt.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    function ymd(dt) {
+      const y = dt.getFullYear();
+      const m = String(dt.getMonth() + 1).padStart(2, '0');
+      const d = String(dt.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
   }
 
   // Nationwide/public filter (covers Nager, Calendarific, and generic pipeline fields)
   function isNational(day) {
     // Nager: global === true means nationwide; counties listed => regional only
-    if (day?.global === true) return true;
-    if (Array.isArray(day?.counties) && day.counties.length > 0) return false;
+    if (day && typeof day === 'object') {
+      if (day.global === true) return true;
+      if (Array.isArray(day.counties) && day.counties.length > 0) return false;
+    }
 
     // Calendarific / mixed: type(s) may include 'National holiday' or 'Public'
     const typesJoined = Array.isArray(day?.types) ? day.types.join(' ') : (day?.type || day?.holidayType || '');
@@ -176,7 +207,19 @@
     if (day?.national === true) return true;
 
     // Fallback text match
-    return t.includes('national') || t.includes('public');
+    if (t.includes('national') || t.includes('public')) return true;
+
+    // If we have NO type/scope info at all and no sub-regions, assume national (permissive).
+    if (day && typeof day === 'object') {
+      const noTypeInfo = !day.type && !day.types && !day.holidayType && !day.scope && !day.level;
+      const noCounties = !Array.isArray(day.counties) || day.counties.length === 0;
+      if (noTypeInfo && noCounties && day.global !== false) return true;
+    }
+
+    // If day is a raw string (no metadata), be permissive so you see heat
+    if (typeof day === 'string' || typeof day === 'number') return true;
+
+    return false;
   }
 
   // Keep in sync with your CSS heat classes
