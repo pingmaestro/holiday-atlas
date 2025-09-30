@@ -168,7 +168,7 @@ import { mountMostTable } from './most-table.js';
 
   function todayISO_UTC() {
     const n = new Date();
-    const y = n.getUTCFullYear(), m = String(n.getUTCMonth()+1).padStart(2,'0'), d = String(n.getUTCDate()).padStart(2,'0');
+    const y = n.getUTCFullYear(), m = String(n.getUTCMonth()+1).padStart(2, '0'), d = String(n.getUTCDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   }
 
@@ -534,6 +534,11 @@ import { mountMostTable } from './most-table.js';
     const totalsJSON = await totalsRes.json();
     TOTALS  = totalsJSON.totals  || {};
     REGIONS = totalsJSON.regions || {};
+
+    // 🔴 PUBLISH to busy-calendar.js (do this immediately after TOTALS is ready)
+    window.TOTALS = TOTALS;
+    document.dispatchEvent(new Event('totals-ready'));
+    console.log('[app.js] Published window.TOTALS with', Object.keys(TOTALS).length, 'countries');
 
     // 2) Build series data using hc-key (lowercased ISO2)
     const rows = Object.entries(TOTALS).map(([code, rec]) => [
@@ -1195,8 +1200,4 @@ import { mountMostTable } from './most-table.js';
       showNext(30);
     }, { capture: true });
   }
-
-  window.TOTALS = TOTALS;
-  document.dispatchEvent(new Event('totals-ready'));
-
 })();
