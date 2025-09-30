@@ -425,6 +425,181 @@ tbody tr:hover { background: #f9fbff; }
 }
 @keyframes ha-spin { to { transform: rotate(360deg); } }
 
+
+/* ============================================================================
+   World Holiday Calendar (Busiest Dates) 
+   ========================================================================== */
+
+.section-head {
+  margin-bottom: 12px;
+}
+.section-title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+}
+.section-subtitle {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Legend */
+.heat-legend {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin: 12px 0 16px;
+}
+.legend-scale {
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg,
+    #e5f7e6 0%,   /* very pale green (0-1) */
+    #b7e3b8 15%,
+    #86cf8a 30%,
+    #5fba66 45%,
+    #f5c36a 60%,  /* transition to yellow/orange */
+    #f08a55 75%,
+    #e24b3c 90%,
+    #c41f2a 100%  /* deep red (busiest) */
+  );
+  border: 1px solid var(--border);
+}
+.legend-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+}
+.legend-captions {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: -2px;
+}
+
+/* Calendar container: 3x4 months on wide screens, stack on mobile */
+.heat-calendar {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, 1fr);
+}
+@media (max-width: 1100px) {
+  .heat-calendar { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 700px) {
+  .heat-calendar { grid-template-columns: 1fr; }
+}
+
+/* Month block */
+.month {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px;
+}
+.month-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.month-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.month .dow {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+/* Month grid: 7 columns (Sun-Sat), ~6 rows */
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+/* Day cells: square buttons for accessibility and focus */
+.month-grid .day {
+  /* Use a button so we can focus via keyboard for tooltip */
+  appearance: none;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 6px;
+  padding: 0;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  position: relative;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.month-grid .day:focus-visible {
+  outline: 2px solid #0ea5e9; /* accessible focus */
+  outline-offset: 2px;
+}
+.month-grid .day:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+}
+
+/* Tiny day number (optional; JS can inject) */
+.month-grid .day .dnum {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* Heat bins: pale green (low) → red (high) */
+.month-grid .day.bin-0 { background: #ffffff; } /* no holidays */
+.month-grid .day.bin-1 { background: #e5f7e6; }
+.month-grid .day.bin-2 { background: #d4efda; }
+.month-grid .day.bin-3 { background: #c2e7cd; }
+.month-grid .day.bin-4 { background: #b0dfc0; }
+.month-grid .day.bin-5 { background: #9dd7b3; }
+.month-grid .day.bin-6 { background: #f5da94; } /* yellow starts */
+.month-grid .day.bin-7 { background: #f3b77f; }
+.month-grid .day.bin-8 { background: #ef8f64; }
+.month-grid .day.bin-9 { background: #e9644d; }
+.month-grid .day.bin-10{ background: #c41f2a; color: #fff; }
+
+/* Optional: stronger border on higher bins for contrast */
+.month-grid .day.bin-8,
+.month-grid .day.bin-9,
+.month-grid .day.bin-10 {
+  border-color: rgba(0,0,0,0.08);
+}
+
+/* Tooltip for hover/focus */
+.heat-tip {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  background: #111827;
+  color: #fff;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+  transform: translate(-50%, calc(-100% - 10px));
+  max-width: 260px;
+  line-height: 1.35;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+/* Utility: visually hidden (screen-reader only) */
+.sr-only {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
 /* ============================================================================
    Helpers
    ========================================================================== */
