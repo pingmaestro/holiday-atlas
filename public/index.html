@@ -12,7 +12,6 @@
     <script src="https://code.highcharts.com/modules/accessibility.js" defer></script>
     <script type="module" src="/app.js"></script>
     <script src="/busy-calendar.js" defer></script>
-
   </head>
   <body>
     <header>
@@ -90,7 +89,9 @@
           <div class="card">
             <div class="section-head">
               <h2 class="section-title">World Holiday Calendar — Busiest Dates</h2>
-              <div class="section-subtitle">Same calendar layout; each date is colored by how many countries celebrate that day.</div>
+              <div class="section-subtitle">
+                Same calendar layout; each date is colored by how many countries celebrate that day.
+              </div>
             </div>
 
             <!-- Legend -->
@@ -99,23 +100,10 @@
               <div class="cal-legend__ticks"><span>0</span><span>1</span><span>5</span><span>10</span><span>20</span><span>40+</span></div>
             </div>
 
-            <!-- 12 month cards (same structure/naming as your country calendar) -->
-            <div class="year-cal">
-              <!-- Repeat this month block 12x; JS will fill days -->
-              <section class="cal-month" aria-label="January">
-                <header class="cal-month__head">
-                  <h3 class="cal-month__name">January 2025</h3>
-                  <div class="cal-dow">S M T W T F S</div>
-                </header>
-                <div class="cal-grid" role="grid">
-                  <!-- JS inserts <button class="cal-day heat-bX" data-count="…" title="…"><span class="cal-day__num">1</span></button> -->
-                </div>
-              </section>
+            <!-- 👇 Leave empty; JS builds the months/days -->
+            <div class="year-cal"></div>
 
-              <!-- … February → December blocks (same markup, empty .cal-grid) … -->
-            </div>
-
-            <!-- Tooltip (optional; JS positions/updates) -->
+            <!-- Optional tooltip container -->
             <div id="busy-tip" class="heat-tip" hidden></div>
           </div>
         </section>
@@ -153,13 +141,14 @@
     </div>
 
     <script>
-      // Smooth in-page scroll (safe even if target section doesn't exist)
+      // Smooth in-page scroll
       document.addEventListener('click', (e) => {
         const a = e.target.closest('a[href^="#"]');
         if (!a) return;
         const el = document.querySelector(a.getAttribute('href'));
         if (!el) return;
-        e.preventDefault(); el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        e.preventDefault();
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         history.replaceState(null, '', a.getAttribute('href'));
       });
 
