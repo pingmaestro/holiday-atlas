@@ -263,6 +263,7 @@
       return ds && String(ds).startsWith(String(YEAR));
     });
   }
+  
 
   // ---------------------- Hydrate-from-API path ----------------------
   async function hydrateFromApi(YEAR, totals) {
@@ -414,6 +415,20 @@
       if (WCAL_TIP.current === el) WCAL_TIP.update(label);
     }
   }
+
+// Broadcast current counts so other modules (like doy-chart) can listen.
+function emitBusyCounts() {
+try {
+    const detail = {
+    year: (new Date()).getFullYear(),                 // or your getYear()
+    counts: { ...CURRENT_COUNTS },                    // unfiltered global counts
+    index: Array.from(DATE_INDEX, ([d, set]) => [d, Array.from(set)]),
+    continentByIso2: Object.fromEntries(CONTINENT_MAP) // if you built it
+    };
+    window.__wcalCounts = detail; // optional global cache
+    window.dispatchEvent(new CustomEvent('busy-counts', { detail }));
+} catch (e) { /* no-op */ }
+}
 
   // ---------------------- Helpers ----------------------
   function addToIndex(iso2, dateStr) {
