@@ -309,7 +309,6 @@ header {
 .cal-day.today.holiday { outline-color: rgba(0,0,0,.25); }
 .cal-day.muted { color: #9ca3af; }
 .cal-day.holiday {
-  border-color: #2e7d32;
   background: #e8f5e9;
   font-weight: 700;
 }
@@ -372,10 +371,6 @@ section#most.card {
   border-radius: 10px;
 }
 
-/* Keep your badge, but make it a ring only (no fill) */
-#busy .year-cal .cal-day.holiday{
-  box-shadow: inset 0 0 0 1.5px #2aa84a;
-}
 
 /* Optional: today's outline */
 #busy .year-cal .cal-day.today{
