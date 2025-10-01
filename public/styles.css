@@ -412,6 +412,20 @@ section#most.card {
 #busy .year-cal .cal-day.heat-b9{ --bg:#c62828; --fg:#fff; }
 
 
+#busy .year-cal .cal-day:hover,
+#busy .year-cal .cal-day:focus {
+  background: var(--bg) !important;
+  color: var(--fg) !important;
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,.08), /* subtle hover ring */
+              var(--ring, 0 0 0 0 transparent);
+}
+
+/* If you use the 'holiday' ring from before, keep it as a ring, not a fill */
+#busy .year-cal .cal-day.holiday { 
+  --ring: inset 0 0 0 1.5px #2aa84a;
+}
+
 
 
 /* ============================================================================

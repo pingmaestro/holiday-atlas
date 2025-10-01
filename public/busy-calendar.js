@@ -23,6 +23,9 @@
     const YEAR = getYear();
     buildCalendar(host, YEAR);
 
+    // NEW: enable date hover tooltip (sum per day)
+    wireCalendarHover();
+
     // Try immediately; otherwise wait/poll for TOTALS to exist
     if (!bootstrap(YEAR)) {
       document.addEventListener('totals-ready', () => bootstrap(YEAR));
@@ -282,9 +285,17 @@
       const date = el.dataset.date;
       const n = countsByDate[date] || 0;
 
-      if (n > 0) el.classList.add('holiday');
-      el.classList.add(countToBin(n));
-      el.title = `${fmtDate(date)} — ${n} ${n === 1 ? 'country' : 'countries'} celebrate`;
+      if (n > 0) el.classList.add('holiday');    // ring (no fill) per your CSS
+      el.classList.add(countToBin(n));           // actual heat color
+
+      // ▼ NEW: store count + accessible label + keep native title fallback
+      el.dataset.count = String(n);
+      const label = `${n} national ${n === 1 ? 'holiday' : 'holidays'} on ${fmtDateLong(date)}`;
+      el.setAttribute('aria-label', label);
+      el.title = label;
+
+      // If tooltip is currently pinned to this cell, update live
+      if (WCAL_TIP.current === el) WCAL_TIP.update(label);
     }
   }
 
@@ -352,6 +363,12 @@
     return `${MONTHS[m-1]} ${d}`;
   }
 
+  // NEW: long form for tooltip
+  function fmtDateLong(yyyyMmDd) {
+    const [y,m,d] = yyyyMmDd.split('-').map(Number);
+    return `${MONTHS[m-1]} ${d}, ${y}`;
+  }
+
   function sumValues(obj) {
     let s = 0; for (const v of Object.values(obj)) s += v || 0; return s;
   }
@@ -402,5 +419,59 @@
         <table style="border-collapse:collapse;width:auto;min-width:240px">${rows}</table>
       </div>`;
     }
+  }
+
+  /* ---------------- Tooltip (hover/focus) ---------------- */
+  const WCAL_TIP = {
+    el: null,
+    current: null,
+    ensure() {
+      if (this.el) return this.el;
+      const t = document.createElement('div');
+      t.className = 'wcal-tip';
+      t.style.cssText = `
+        position:absolute; transform:translate(-50%,-6px);
+        padding:6px 8px; border-radius:8px; font:12px/1.3 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+        background:#111; color:#fff; box-shadow:0 2px 10px rgba(0,0,0,.12);
+        pointer-events:none; z-index:9999; white-space:nowrap;
+      `;
+      t.hidden = true;
+      document.body.appendChild(t);
+      this.el = t;
+      return t;
+    },
+    showFor(el) {
+      const t = this.ensure();
+      const txt = el.getAttribute('aria-label') || `${el.dataset.count || 0} national holidays on ${fmtDateLong(el.dataset.date)}`;
+      this.update(txt);
+      const r = el.getBoundingClientRect();
+      t.style.left = Math.round(window.scrollX + r.left + r.width/2) + 'px';
+      t.style.top  = Math.round(window.scrollY + r.top) + 'px';
+      t.hidden = false;
+      this.current = el;
+    },
+    update(txt) { if (this.el) this.el.textContent = txt; },
+    hide() { if (this.el) this.el.hidden = true; this.current = null; }
+  };
+
+  function wireCalendarHover() {
+    const root = document.querySelector('#busy');
+    if (!root) return;
+
+    root.addEventListener('mouseover', (e) => {
+      const cell = e.target.closest('.cal-day[data-date]');
+      if (cell) WCAL_TIP.showFor(cell);
+    });
+    root.addEventListener('mouseout', (e) => {
+      const from = e.target.closest('.cal-day[data-date]');
+      const to   = e.relatedTarget && e.relatedTarget.closest?.('.cal-day[data-date]');
+      if (from && from !== to) WCAL_TIP.hide();
+    });
+    root.addEventListener('focusin', (e) => {
+      const cell = e.target.closest('.cal-day[data-date]');
+      if (cell) WCAL_TIP.showFor(cell);
+    });
+    root.addEventListener('focusout', () => WCAL_TIP.hide());
+    window.addEventListener('scroll', () => WCAL_TIP.hide(), { passive: true });
   }
 })();
