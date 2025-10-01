@@ -589,6 +589,9 @@ import { mountMostTable } from './most-table.js';
     const continentByIso2 = Object.fromEntries(
       Object.keys(TOTALS).map(iso2 => [iso2, getContinent(iso2)])
     );
+    
+    window.haContinentByIso2 = continentByIso2;
+
     // ========================================================================
 
     // 4) Render map

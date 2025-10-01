@@ -1,8 +1,6 @@
 // busy-calendar.js — World Holiday Calendar (Busiest Dates)
 // Builds a full-year grid and heat-shades each date by # of countries with a NATIONAL/PUBLIC holiday.
-// Works with either:
-//   A) window.TOTALS where each country record has day objects (rec.days),
-//   B) or just country counts — in which case we hydrate per-day data via /api/holidayDetails.
+// Also supports dynamic heat scaling (handles 0..100+) and continent filters.
 //
 // Uses your existing CSS classes: .year-cal, .cal-month, h4, .cal-dow, .cal-grid, .cal-day
 // Heat classes expected: .heat-b0 … .heat-b9  and .holiday
@@ -16,6 +14,49 @@
   const QS = new URLSearchParams(location.search);
   const FORCE_DEBUG = QS.get('debug') === '1';
 
+  // ---- Dynamic scale state ----
+  let BREAKS = [1,4,9,14,19,29,39,59,60]; // default (legacy-ish); recomputed after first counts
+  function deriveBreaks(max) {
+    // If the max is modest, keep your legacy-ish comfort bins.
+    if (!Number.isFinite(max) || max <= 60) return [1,4,9,14,19,29,39,59,60];
+
+    // For higher maxima, extend the tail so the top dates (e.g., Xmas ~100+) stand out.
+    // Keep lower bins stable (so light greens are comparable), stretch high bins relative to max.
+    const b6 = Math.max(29, Math.round(max * 0.35)); // start of stronger oranges
+    const b7 = Math.max(39, Math.round(max * 0.50));
+    const b8 = Math.max(59, Math.round(max * 0.70));
+    const b9 = Math.max(60, Math.ceil (max * 0.90)); // dark red ~ top 10%
+    return [1,4,9,14,19, b6, b7, b8, b9];
+  }
+
+  function countToBinDynamic(n) {
+    if (n <= 0) return 'heat-b0';
+    const [b1,b2,b3,b4,b5,b6,b7,b8,b9] = BREAKS;
+    if (n <= b1) return 'heat-b1';
+    if (n <= b2) return 'heat-b2';
+    if (n <= b3) return 'heat-b3';
+    if (n <= b4) return 'heat-b4';
+    if (n <= b5) return 'heat-b5';
+    if (n <= b6) return 'heat-b6';
+    if (n <= b7) return 'heat-b7';
+    if (n <= b8) return 'heat-b8';
+    // > b8 (into top ~10%) -> b9
+    return 'heat-b9';
+  }
+
+  // ---- Continent filtering state ----
+  const ALL_CONTINENTS = ['Africa','Asia','Europe','North America','South America','Oceania'];
+  let SELECTED_CONTINENTS = new Set(ALL_CONTINENTS); // "All" by default
+  const CONTINENT_MAP = new Map(); // ISO2 -> Continent (filled from window if available)
+
+  // We also keep an index so we can filter by continent without refetching:
+  // date -> Set(ISO2)
+  const DATE_INDEX = new Map();
+  let CURRENT_COUNTS = {}; // last seen unfiltered counts (for fallback when no continent map)
+
+  // UI refs
+  let filtersEl = null;
+
   document.addEventListener('DOMContentLoaded', () => {
     const host = document.querySelector('#busy .year-cal') || ensureHost();
     if (!host) return;
@@ -23,7 +64,7 @@
     const YEAR = getYear();
     buildCalendar(host, YEAR);
 
-    // NEW: enable date hover tooltip (sum per day)
+    // NEW: hover tooltip for day sums
     wireCalendarHover();
 
     // Try immediately; otherwise wait/poll for TOTALS to exist
@@ -38,6 +79,9 @@
 
   // ---------------------- Boot flow ----------------------
   function bootstrap(YEAR) {
+    ingestContinentMap(); // load continent map if app.js exposed it
+    maybeRenderFilters(); // show/hide filters based on availability
+
     const totals = window.TOTALS;
     if (!totals || !Object.keys(totals).length) {
       showDebug({year: YEAR, note: 'TOTALS not ready or empty.', counts: {}, stage: 'waiting'});
@@ -50,13 +94,19 @@
                                  : buildCountsFromTotals(totals, YEAR, /*permissive=*/true);
 
     if (sumValues(directCountsPerm) > 0) {
-      colorize(directCountsPerm);
-      showDebug(summary(directCountsPerm, YEAR, {mode: directCountsPerm === directCountsStrict ? 'Strict' : 'Permissive', stage:'direct'}));
+      CURRENT_COUNTS = directCountsPerm;
+      BREAKS = deriveBreaks(maxValue(CURRENT_COUNTS));
+      repaint(); // will color using filter (if any)
+      showDebug(summary(CURRENT_COUNTS, YEAR, {
+        mode: directCountsPerm === directCountsStrict ? 'Strict' : 'Permissive',
+        stage:'direct',
+        note: scaleNote()
+      }));
       return true;
     }
 
     // If TOTALS doesn't have day lists (usual in your pipeline), hydrate per-day via /api/holidayDetails
-    hydrateFromApi(YEAR, totals).catch(()=>{}); // async, updates incrementally
+    hydrateFromApi(YEAR, totals).catch(()=>{});
     return true; // Calendar is built; hydration will paint progressively
   }
 
@@ -67,6 +117,27 @@
     const div = document.createElement('div');
     div.className = 'year-cal';
     card.appendChild(div);
+
+    // Filters bar (invisible until we have a continent map)
+    const filters = document.createElement('div');
+    filters.className = 'busy-filters';
+    filters.style.cssText = 'display:none; gap:6px; margin:8px 0 4px; flex-wrap:wrap; align-items:center;';
+    filters.innerHTML = `
+      <div style="font:12px/1.2 system-ui; color:#374151; margin-right:6px;">Filter:</div>
+      <button type="button" class="bf-btn on" data-cont="__ALL__">All</button>
+      <button type="button" class="bf-btn" data-cont="Africa">Africa</button>
+      <button type="button" class="bf-btn" data-cont="Asia">Asia</button>
+      <button type="button" class="bf-btn" data-cont="Europe">Europe</button>
+      <button type="button" class="bf-btn" data-cont="North America">North America</button>
+      <button type="button" class="bf-btn" data-cont="South America">South America</button>
+      <button type="button" class="bf-btn" data-cont="Oceania">Oceania</button>
+    `;
+    // minimal styles for buttons
+    filters.querySelectorAll('.bf-btn').forEach(b=>{
+      b.style.cssText = 'font:12px/1 system-ui; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff; cursor:pointer;';
+    });
+    card.insertBefore(filters, div);
+    filtersEl = filters;
 
     // debug panel shell
     const dbg = document.createElement('div');
@@ -133,13 +204,31 @@
       sec.appendChild(grid);
       host.appendChild(sec);
     }
+
+    // Wire filter click once we know host exists
+    if (filtersEl) {
+      filtersEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('.bf-btn');
+        if (!btn) return;
+        filtersEl.querySelectorAll('.bf-btn').forEach(b => b.classList.remove('on'));
+        btn.classList.add('on');
+
+        const tag = btn.dataset.cont;
+        if (tag === '__ALL__') {
+          SELECTED_CONTINENTS = new Set(ALL_CONTINENTS);
+        } else {
+          SELECTED_CONTINENTS = new Set([tag]);
+        }
+        repaint();
+      });
+    }
   }
 
   // ---------------------- Direct-from-TOTALS path ----------------------
   function buildCountsFromTotals(TOTALS, YEAR, permissive) {
     const map = Object.create(null);
 
-    for (const [, rec] of Object.entries(TOTALS)) {
+    for (const [iso2, rec] of Object.entries(TOTALS)) {
       const days = findYearDays(rec, YEAR);
       if (!days.length) continue;
 
@@ -149,6 +238,7 @@
         if (!permissive && !isNational(day)) continue;
 
         map[dateStr] = (map[dateStr] || 0) + 1;
+        addToIndex(iso2, dateStr);
       }
     }
     return map;
@@ -185,8 +275,10 @@
       try {
         const counts = JSON.parse(cached) || {};
         if (sumValues(counts) > 0) {
-          colorize(counts);
-          showDebug(summary(counts, YEAR, {mode:'Strict', stage:'cache', note:'Loaded from session cache.'}));
+          CURRENT_COUNTS = counts;
+          BREAKS = deriveBreaks(maxValue(CURRENT_COUNTS));
+          repaint();
+          showDebug(summary(counts, YEAR, {mode:'Strict', stage:'cache', note: scaleNote(true)}));
           return;
         }
       } catch { /* ignore bad cache */ }
@@ -194,11 +286,11 @@
 
     // Progressive build with a small worker pool
     const counts = Object.create(null);
-    let processed = 0, nationals = 0;
+    let processed = 0;
     const POOL = 8;
     let i = 0;
 
-    showDebug({year: YEAR, stage:'fetch', mode:'Strict', progress: `0 / ${iso2s.length}`, nonZeroDays: 0, max: 0, top: []});
+    showDebug({year: YEAR, stage:'fetch', mode:'Strict', progress: `0 / ${iso2s.length}`, nonZeroDays: 0, max: 0, top: [], note: scaleNote(true)});
 
     async function worker() {
       while (i < iso2s.length) {
@@ -215,16 +307,17 @@
             if (!dateStr || !dateStr.startsWith(String(YEAR))) continue;
             if (!isNational(day)) continue; // strict by default
             counts[dateStr] = (counts[dateStr] || 0) + 1;
-            nationals++;
+            addToIndex(iso2, dateStr);
           }
         } catch {
           // ignore this iso2 on failure
         } finally {
           processed++;
           if (processed % 6 === 0 || processed === iso2s.length) {
-            // incremental paint + progress
-            colorize(counts);
-            showDebug(summary(counts, YEAR, {mode:'Strict', stage:'fetch', progress: `${processed} / ${iso2s.length}`}));
+            CURRENT_COUNTS = counts;
+            BREAKS = deriveBreaks(maxValue(CURRENT_COUNTS));
+            repaint(); // incremental paint under current filter
+            showDebug(summary(counts, YEAR, {mode:'Strict', stage:'fetch', progress: `${processed} / ${iso2s.length}`, note: scaleNote()}));
           }
         }
       }
@@ -251,20 +344,22 @@
               const dateStr = normalizeDate(day);
               if (!dateStr || !dateStr.startsWith(String(YEAR))) continue;
               countsAll[dateStr] = (countsAll[dateStr] || 0) + 1;
+              addToIndex(iso2, dateStr);
             }
           } catch { /* ignore */ }
           finally {
             processed2++;
             if (processed2 % 6 === 0 || processed2 === iso2s.length) {
-              colorize(countsAll);
-              showDebug(summary(countsAll, YEAR, {mode:'Permissive', stage:'fetch', progress: `${processed2} / ${iso2s.length}`}));
+              CURRENT_COUNTS = countsAll;
+              BREAKS = deriveBreaks(maxValue(CURRENT_COUNTS));
+              repaint();
+              showDebug(summary(countsAll, YEAR, {mode:'Permissive', stage:'fetch', progress: `${processed2} / ${iso2s.length}`, note: scaleNote()}));
             }
           }
         }
       }
       await Promise.all(Array.from({length: POOL}, worker2));
 
-      // cache permissive if non-empty
       if (sumValues(countsAll) > 0) {
         try { sessionStorage.setItem(cacheKey, JSON.stringify(countsAll)); } catch {}
       }
@@ -275,8 +370,31 @@
     try { sessionStorage.setItem(cacheKey, JSON.stringify(counts)); } catch {}
   }
 
+  // ---------------------- Repaint with filter ----------------------
+  function repaint() {
+    // If we don't have a continent map or the filter is ALL, just apply CURRENT_COUNTS.
+    if (!CONTINENT_MAP.size || SELECTED_CONTINENTS.size === ALL_CONTINENTS.length) {
+      applyColors(CURRENT_COUNTS);
+      return;
+    }
+
+    // Build filtered counts: for each date, count only countries in selected continents.
+    const filtered = Object.create(null);
+    for (const [date, isoSet] of DATE_INDEX.entries()) {
+      let n = 0;
+      for (const iso2 of isoSet) {
+        const cont = CONTINENT_MAP.get(iso2) || 'Other';
+        if (SELECTED_CONTINENTS.has(cont)) n++;
+      }
+      if (n > 0) filtered[date] = n;
+    }
+    // Re-derive breaks from the filtered data so contrast stays good when narrowing.
+    BREAKS = deriveBreaks(maxValue(filtered));
+    applyColors(filtered);
+  }
+
   // ---------------------- Paint ----------------------
-  function colorize(countsByDate) {
+  function applyColors(countsByDate) {
     const nodes = document.querySelectorAll('#busy .cal-day[data-date]');
     for (const el of nodes) {
       for (const h of HEAT) el.classList.remove(h);
@@ -285,21 +403,43 @@
       const date = el.dataset.date;
       const n = countsByDate[date] || 0;
 
-      if (n > 0) el.classList.add('holiday');    // ring (no fill) per your CSS
-      el.classList.add(countToBin(n));           // actual heat color
+      if (n > 0) el.classList.add('holiday'); // ring (no fill) per your CSS
+      el.classList.add(countToBinDynamic(n)); // dynamic heat color
 
-      // ▼ NEW: store count + accessible label + keep native title fallback
+      // Tooltip & a11y
       el.dataset.count = String(n);
       const label = `${n} national ${n === 1 ? 'holiday' : 'holidays'} on ${fmtDateLong(date)}`;
       el.setAttribute('aria-label', label);
       el.title = label;
-
-      // If tooltip is currently pinned to this cell, update live
       if (WCAL_TIP.current === el) WCAL_TIP.update(label);
     }
   }
 
   // ---------------------- Helpers ----------------------
+  function addToIndex(iso2, dateStr) {
+    const k = String(iso2 || '').toUpperCase().slice(0,2);
+    if (!k || !dateStr) return;
+    let set = DATE_INDEX.get(dateStr);
+    if (!set) { set = new Set(); DATE_INDEX.set(dateStr, set); }
+    set.add(k);
+  }
+
+  function ingestContinentMap() {
+    const m = window.haContinentByIso2 || window.continentByIso2 || null;
+    if (!m || typeof m !== 'object') return;
+    for (const [k,v] of Object.entries(m)) {
+      const iso2 = String(k).toUpperCase();
+      const cont = String(v || '').trim();
+      if (iso2.length === 2 && cont) CONTINENT_MAP.set(iso2, cont);
+    }
+  }
+
+  function maybeRenderFilters() {
+    if (!filtersEl) return;
+    // Show only if we have a useful map
+    filtersEl.style.display = CONTINENT_MAP.size ? 'flex' : 'none';
+  }
+
   function normalizeDate(day) {
     if (day == null) return null;
 
@@ -345,33 +485,17 @@
     return false;
   }
 
-  function countToBin(n) {
-    if (n === 0) return 'heat-b0';
-    if (n === 1) return 'heat-b1';
-    if (n <= 4) return 'heat-b2';
-    if (n <= 9) return 'heat-b3';
-    if (n <= 14) return 'heat-b4';
-    if (n <= 19) return 'heat-b5';
-    if (n <= 29) return 'heat-b6';
-    if (n <= 39) return 'heat-b7';
-    if (n <= 59) return 'heat-b8';
-    return 'heat-b9';
-  }
-
   function fmtDate(yyyyMmDd) {
     const [y,m,d] = yyyyMmDd.split('-').map(Number);
     return `${MONTHS[m-1]} ${d}`;
   }
-
-  // NEW: long form for tooltip
   function fmtDateLong(yyyyMmDd) {
     const [y,m,d] = yyyyMmDd.split('-').map(Number);
     return `${MONTHS[m-1]} ${d}, ${y}`;
   }
 
-  function sumValues(obj) {
-    let s = 0; for (const v of Object.values(obj)) s += v || 0; return s;
-  }
+  function sumValues(obj) { let s = 0; for (const v of Object.values(obj)) s += v || 0; return s; }
+  function maxValue(obj) { let m = 0; for (const v of Object.values(obj)) if ((v||0) > m) m = v||0; return m; }
 
   function summary(counts, YEAR, {mode='Strict', stage='direct', progress='', note} = {}) {
     const vals = Object.entries(counts);
@@ -388,8 +512,13 @@
       nonZeroDays: nonZero.length,
       sampleDomDate: (document.querySelector('#busy .cal-day[data-date]') || {}).dataset?.date || '(none)',
       top,
-      note
+      note: note || scaleNote()
     };
+  }
+
+  function scaleNote(fromCache=false) {
+    const [b1,b2,b3,b4,b5,b6,b7,b8,b9] = BREAKS;
+    return `Scale${fromCache?' (cached)':''}: 1, ≤${b2}, ≤${b3}, ≤${b4}, ≤${b5}, ≤${b6}, ≤${b7}, ≤${b8}, >${b8}`;
   }
 
   function showDebug(info) {
@@ -404,8 +533,8 @@
         <div style="font-weight:600;margin-bottom:6px">World Holiday Calendar — Debug</div>
         <div>Year: <b>${info.year}</b> • Mode: <b>${info.mode}</b> • Stage: <b>${info.stage}</b>${info.progress ? ` • Progress: <b>${info.progress}</b>` : ''}</div>
         <div>Days with ≥1 holiday: <b>${info.nonZeroDays||0}</b> • Max/day: <b>${info.max||0}</b></div>
+        <div>${info.note ? info.note : ''}</div>
         <div style="margin-top:4px;color:#6b7280">DOM sample day: <code>${info.sampleDomDate || ''}</code></div>
-        ${info.note ? `<div style="margin-top:6px;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;padding:6px;border-radius:6px">${info.note}</div>` : ''}
         ${Array.isArray(info.top) && info.top.length ? renderTop(info.top) : '<div style="margin-top:6px;">No non-zero dates yet.</div>'}
         <div style="margin-top:6px;color:#6b7280">Tip: add <code>?debug=1</code> to always show this panel.</div>
       </div>
