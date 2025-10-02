@@ -14,6 +14,9 @@
   const QS = new URLSearchParams(location.search);
   const FORCE_DEBUG = QS.get('debug') === '1';
 
+  // Track the active calendar year so emitters send the right value
+  let CURRENT_YEAR = null;
+
   // ---- Dynamic scale state ----
   let BREAKS = [1,4,9,14,19,29,39,59,60]; // default (legacy-ish); recomputed after first counts
   function deriveBreaks(max) {
@@ -62,6 +65,8 @@
     if (!host) return;
 
     const YEAR = getYear();
+    CURRENT_YEAR = YEAR;
+
     buildCalendar(host, YEAR);
 
     // NEW: hover tooltip for day sums
@@ -96,7 +101,8 @@
     if (sumValues(directCountsPerm) > 0) {
       CURRENT_COUNTS = directCountsPerm;
       BREAKS = deriveBreaks(maxValue(CURRENT_COUNTS));
-      repaint(); // will color using filter (if any)
+      repaint();                // will color using filter (if any)
+      emitBusyCounts();         // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<  DoY chart feed
       showDebug(summary(CURRENT_COUNTS, YEAR, {
         mode: directCountsPerm === directCountsStrict ? 'Strict' : 'Permissive',
         stage:'direct',
@@ -279,6 +285,7 @@
           CURRENT_COUNTS = counts;
           BREAKS = deriveBreaks(maxValue(CURRENT_COUNTS));
           repaint();
+          emitBusyCounts(); // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<  DoY chart feed
           showDebug(summary(counts, YEAR, {mode:'Strict', stage:'cache', note: scaleNote(true)}));
           return;
         }
@@ -317,7 +324,8 @@
           if (processed % 6 === 0 || processed === iso2s.length) {
             CURRENT_COUNTS = counts;
             BREAKS = deriveBreaks(maxValue(CURRENT_COUNTS));
-            repaint(); // incremental paint under current filter
+            repaint();            // incremental paint under current filter
+            emitBusyCounts();     // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<  DoY chart feed
             showDebug(summary(counts, YEAR, {mode:'Strict', stage:'fetch', progress: `${processed} / ${iso2s.length}`, note: scaleNote()}));
           }
         }
@@ -354,6 +362,7 @@
               CURRENT_COUNTS = countsAll;
               BREAKS = deriveBreaks(maxValue(CURRENT_COUNTS));
               repaint();
+              emitBusyCounts();   // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<  DoY chart feed
               showDebug(summary(countsAll, YEAR, {mode:'Permissive', stage:'fetch', progress: `${processed2} / ${iso2s.length}`, note: scaleNote()}));
             }
           }
@@ -376,6 +385,7 @@
     // If we don't have a continent map or the filter is ALL, just apply CURRENT_COUNTS.
     if (!CONTINENT_MAP.size || SELECTED_CONTINENTS.size === ALL_CONTINENTS.length) {
       applyColors(CURRENT_COUNTS);
+      emitBusyCounts(); // emit unfiltered counts for DoY chart
       return;
     }
 
@@ -392,6 +402,7 @@
     // Re-derive breaks from the filtered data so contrast stays good when narrowing.
     BREAKS = deriveBreaks(maxValue(filtered));
     applyColors(filtered);
+    emitBusyCounts(); // still emit the global CURRENT_COUNTS for DoY consumers
   }
 
   // ---------------------- Paint ----------------------
@@ -416,19 +427,20 @@
     }
   }
 
-// Broadcast current counts so other modules (like doy-chart) can listen.
-function emitBusyCounts() {
-try {
-    const detail = {
-    year: (new Date()).getFullYear(),                 // or your getYear()
-    counts: { ...CURRENT_COUNTS },                    // unfiltered global counts
-    index: Array.from(DATE_INDEX, ([d, set]) => [d, Array.from(set)]),
-    continentByIso2: Object.fromEntries(CONTINENT_MAP) // if you built it
-    };
-    window.__wcalCounts = detail; // optional global cache
-    window.dispatchEvent(new CustomEvent('busy-counts', { detail }));
-} catch (e) { /* no-op */ }
-}
+  // ---------------------- DoY chart emitter ----------------------
+  // Broadcast current counts so other modules (like doy-chart) can listen.
+  function emitBusyCounts() {
+    try {
+      const detail = {
+        year: CURRENT_YEAR || new Date().getFullYear(),
+        counts: { ...CURRENT_COUNTS },                               // unfiltered global counts
+        index: Array.from(DATE_INDEX, ([d, set]) => [d, Array.from(set)]),
+        continentByIso2: Object.fromEntries(CONTINENT_MAP)           // if we have it
+      };
+      window.__wcalCounts = detail; // optional global cache for late listeners
+      window.dispatchEvent(new CustomEvent('busy-counts', { detail }));
+    } catch (e) { /* no-op */ }
+  }
 
   // ---------------------- Helpers ----------------------
   function addToIndex(iso2, dateStr) {
